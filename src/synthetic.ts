@@ -274,7 +274,8 @@ export function writeSyntheticHistory(opts: SyntheticOptions): SyntheticResult {
                   window_minutes: 10080,
                   resets_at: resetsAt + 4 * 86_400,
                 },
-                plan_type: "pro",
+                // Plus: on 7 Oct 2026 OpenAI listed a five-hour limit for Plus and none for Pro
+                plan_type: "plus",
               },
             },
           }),

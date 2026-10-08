@@ -2,9 +2,6 @@
 name: rates
 description: Explain whether the same coding-agent work started costing a different number of tokens - step changes in tokens per request, cache-read share, cache writes per read, tokens per user turn, the 1-hour versus 5-minute cache split, and Codex tokens per 1% of its 5-hour window - with the date and client version where each starts, by running seatledger rates on local transcripts. Use when the user suspects their usage limits or costs changed, or asks whether an update made things more expensive.
 argument-hint: "[--since 90d] [--client claude-code|codex] [--model <id>]"
-allowed-tools:
-  - Bash(npx -y seatledger@latest rates)
-  - Bash(npx -y seatledger@latest rates *)
 ---
 
 # Explain step changes in token rates
@@ -13,7 +10,8 @@ seatledger (`seatledger` on npm, MIT) reads this machine's Claude Code and Codex
 looks, per client and model, for days where the way requests use tokens stepped up or down and
 stayed there. It makes no network calls and sends nothing anywhere.
 
-Run:
+Run it with the Bash tool (Claude Code asks the user to approve the command; this skill pre-approves
+nothing):
 
 ```sh
 npx -y seatledger@latest rates $ARGUMENTS

@@ -25,8 +25,8 @@
   <text x="16" y="386" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Limits: none set. `seatledger limits set --window 5h --tokens N` records your own;</text>
   <text x="16" y="403" textLength="402.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  seatledger does not guess a vendor's plan limits.</text>
   <text x="16" y="420" textLength="426.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Vendor readings, as the client last wrote them to disk</text>
-  <text x="16" y="437" textLength="537.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex 5-hour window: 26% used, resets 18:00, plan pro (read 13:43)</text>
-  <text x="16" y="454" textLength="616.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex weekly window: 7% used, resets Sun 11 Oct 18:00, plan pro (read 13:43)</text>
+  <text x="16" y="437" textLength="545.1" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex 5-hour window: 26% used, resets 18:00, plan plus (read 13:43)</text>
+  <text x="16" y="454" textLength="624.1" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex weekly window: 7% used, resets Sun 11 Oct 18:00, plan plus (read 13:43)</text>
   <text x="16" y="471" xml:space="preserve"></text>
   <text x="16" y="488" textLength="734.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">API-equiv $ = what these tokens would cost at the vendor's API list prices. Not what you were</text>
   <text x="16" y="505" textLength="387.1" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  billed; a seat is a flat fee with an allowance.</text>

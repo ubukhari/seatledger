@@ -1660,7 +1660,7 @@ async function teamSummary(ctx, since) {
     throw new TeamApiError(
       "NO_TEAM_KEY",
       "this machine has not joined a seatledger team",
-      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or set SEATLEDGER_KEY",
+      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or `npx seatledger team create` to start a team, or set SEATLEDGER_KEY",
       false
     );
   const q = since ? `?since=${encodeURIComponent(since)}` : "";
@@ -1735,7 +1735,7 @@ var TOOLS = [
   {
     name: "seatledger_team_summary",
     title: "Team coding-agent ledger",
-    description: "The hosted seatledger team ledger this machine joined with `seatledger team join`: what the team's coding-agent seats and tokens bought, from every developer's pushed daily aggregates. Returns team totals; tables by day, month, developer, model and client; and the rate-change findings feed, each with its date, the developer, the client version and whether that was its first day, and what the step is consistent with. A developer's key sees every team total and only their own row in `by_developer`; the owner key sees every developer. Dollars are API-equivalent (the same tokens at API list prices), not what anyone was billed. History is as long as the team's plan keeps (Free 30 days, Team and Business 13 months). Needs the key `seatledger team join` saved in ~/.seatledger/team.json, or SEATLEDGER_KEY; without one it returns NO_TEAM_KEY. This tool makes one HTTPS request to that ledger and changes nothing.",
+    description: "The hosted seatledger team ledger this machine created or joined (`seatledger team create` or `seatledger team join`): what the team's coding-agent seats and tokens bought, from every developer's pushed daily aggregates. Returns team totals; tables by day, month, developer, model and client; and the rate-change findings feed, each with its date, the developer, the client version and whether that was its first day, and what the step is consistent with. A developer's key sees every team total and only their own row in `by_developer`; the owner key sees every developer. Dollars are API-equivalent (the same tokens at API list prices), not what anyone was billed. History is as long as the team's plan keeps (Free 30 days, Team and Business 13 months). Needs the key `seatledger team create` or `team join` saved in ~/.seatledger/team.json, or SEATLEDGER_KEY; without one it returns NO_TEAM_KEY. This tool makes one HTTPS request to that ledger and changes nothing.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1832,7 +1832,7 @@ async function callTool(name, rawArgs, ctx = {}) {
     return { structured: { ...body }, isError: true };
   }
 }
-var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine joined, with its saved key.";
+var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
 async function handleMessage(msg, ctx) {
   if (Array.isArray(msg)) {
     const out = (await Promise.all(msg.map((m) => handleMessage(m, ctx)))).filter(
@@ -2122,7 +2122,8 @@ function writeSyntheticHistory(opts) {
                   window_minutes: 10080,
                   resets_at: resetsAt + 4 * 86400
                 },
-                plan_type: "pro"
+                // Plus: on 7 Oct 2026 OpenAI listed a five-hour limit for Plus and none for Pro
+                plan_type: "plus"
               }
             }
           })

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.1 (2026-10-07)
+
+From a free install to a team ledger, in one command.
+
+- `seatledger team create [--name] [--email] [--as]`: creates a free hosted team (up to 3
+  developers), saves its owner key to `~/.seatledger/team.json` (0600) exactly as `team join`
+  saves a developer key, and prints the invite link for teammates and the dashboard. `--dry-run`
+  prints exactly what would be sent. Errors carry code, cause, fix and whether to retry.
+- One dim line about the team ledger after `seatledger`, `report` and (when it found a step
+  change) `rates`: at most once a day per machine, only on a terminal, never with `--json`, in
+  MCP output or once this machine is on a team. `--quiet` or `SEATLEDGER_QUIET=1` turns it off.
+  Printing it sends nothing.
+- Links the CLI prints to the seatledger pages carry `?ref=cli`.
+- The Claude Code plugin skills no longer pre-approve their command (no `allowed-tools`): Claude
+  Code asks before each run. The plugin has a listing icon and a README.
+- The synthetic Codex history (`seatledger demo`) is on Plus, the plan OpenAI lists with a
+  five-hour window; the README picture is regenerated.
+
 ## 0.2.0 (2026-10-07)
 
 The team ledger, optional and opt-in.

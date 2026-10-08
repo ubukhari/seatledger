@@ -37,7 +37,7 @@ const FIRST_PUSH_DAYS = 400;
 
 function notOnTeam(): TeamUsage {
   return new TeamUsage(
-    "not on a team yet: run `seatledger team join <invite link> --as <name>`, or set SEATLEDGER_KEY",
+    "not on a team yet: run `seatledger team join <invite link> --as <name>`, or `seatledger team create` to start one, or set SEATLEDGER_KEY",
   );
 }
 
@@ -167,6 +167,178 @@ export async function runJoin(
   return { joined, file, url };
 }
 
+// ---- team create ------------------------------------------------------------------------------
+
+/** The service's rule for a team name (apps/agentcheck seatledger/_lib/protocol.ts). */
+const TEAM_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{0,59}$/u;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export interface CreateOptions {
+  name?: string;
+  email?: string;
+  as?: string;
+  force?: boolean;
+}
+
+/** What `team create` would POST, and where; `--dry-run` prints exactly this. */
+export interface CreatePlan {
+  url: string;
+  route: "/api/seatledger/v1/teams";
+  body: { accept_terms: true; name?: string; member?: string; owner_email?: string };
+  saveTo: string;
+  terms: string;
+}
+
+/** The service's answer to POST /api/seatledger/v1/teams. */
+export interface Created {
+  team_id: string;
+  name: string;
+  plan: string;
+  developers: number;
+  history_days: number;
+  owner_key: string;
+  member: string;
+  invite_url: string;
+}
+
+export interface CreateOutcome {
+  created: Omit<Created, "owner_key">;
+  url: string;
+  file: string;
+  dashboard: string;
+  terms: string;
+  /** SEATLEDGER_KEY is set, so it, not the saved owner key, is what push and team use */
+  envKeyShadows: boolean;
+}
+
+const invalid = (field: string, cause: string, fix: string) =>
+  new TeamApiError(`INVALID_${field}`, cause, fix, false);
+
+/** Checks the flags the way the service will, so a bad name fails before anything is sent. */
+export function planCreate(ctx: TeamContext, opts: CreateOptions): CreatePlan {
+  const body: CreatePlan["body"] = { accept_terms: true };
+  if (opts.name !== undefined) {
+    const name = opts.name.trim();
+    if (!TEAM_NAME.test(name))
+      throw invalid(
+        "NAME",
+        `--name "${opts.name}" is not a team name: up to 60 letters, digits, spaces and . _ & ' -, starting with a letter or digit`,
+        'pass a plain name, e.g. --name "Acme platform"',
+      );
+    body.name = name;
+  }
+  if (opts.as !== undefined) {
+    if (!validHandle(opts.as))
+      throw invalid(
+        "MEMBER",
+        `--as "${opts.as}" is not a developer name: a-z, 0-9, . _ - (up to 32), starting with a letter or digit`,
+        "pass a short lower-case name, e.g. --as alice",
+      );
+    body.member = opts.as;
+  }
+  if (opts.email !== undefined) {
+    const email = opts.email.trim();
+    if (!EMAIL.test(email) || email.length > 254)
+      throw invalid(
+        "EMAIL",
+        `--email "${opts.email}" is not an email address`,
+        "pass the address rate-change alerts should go to on a paid plan, e.g. --email lead@example.com",
+      );
+    body.owner_email = email;
+  }
+  const existing = savedTeam(ctx.home);
+  if (existing?.key && !opts.force)
+    throw new TeamApiError(
+      "ALREADY_ON_TEAM",
+      `this machine is already on ${existing.team ?? "a team"} as ${existing.member ?? "?"} (${teamFile(ctx.home)})`,
+      "run `seatledger team` to see that team; pass --force to replace its key with the new team's owner key",
+      false,
+    );
+  const url = (ctx.env.SEATLEDGER_URL?.trim() || DEFAULT_URL).replace(/\/+$/, "");
+  return {
+    url,
+    route: "/api/seatledger/v1/teams",
+    body,
+    saveTo: teamFile(ctx.home),
+    terms: `${url}/terms`,
+  };
+}
+
+/** Creates the team, then saves its owner key exactly as `team join` saves a developer key. */
+export async function runCreate(ctx: TeamContext, plan: CreatePlan): Promise<CreateOutcome> {
+  const created = await callApi<Created>(plan.url, "POST", plan.route, {
+    body: plan.body,
+    ...(ctx.fetch ? { fetch: ctx.fetch } : {}),
+  });
+  if (typeof created.owner_key !== "string" || typeof created.invite_url !== "string")
+    throw new TeamApiError(
+      "BAD_RESPONSE",
+      `POST ${plan.route} did not return an owner key and an invite link`,
+      "check SEATLEDGER_URL points at the seatledger service",
+      false,
+    );
+  const file = writeTeamConfig(ctx.home, {
+    url: plan.url,
+    key: created.owner_key,
+    teamId: created.team_id,
+    team: created.name,
+    member: created.member,
+  });
+  return {
+    // everything the service said except the key, which is saved and never printed
+    created: {
+      team_id: created.team_id,
+      name: created.name,
+      plan: created.plan,
+      developers: created.developers,
+      history_days: created.history_days,
+      member: created.member,
+      invite_url: created.invite_url,
+    },
+    url: plan.url,
+    file,
+    dashboard: `${plan.url}/seatledger/dashboard?ref=cli`,
+    terms: plan.terms,
+    envKeyShadows: Boolean(ctx.env.SEATLEDGER_KEY?.trim()),
+  };
+}
+
+const planName = (tier: string) => tier.charAt(0).toUpperCase() + tier.slice(1);
+
+export function renderCreate(o: CreateOutcome): string {
+  const c = o.created;
+  const history = c.history_days >= 365 ? "13 months" : `${c.history_days} days`;
+  return [
+    `Created ${c.name} on seatledger ${planName(c.plan)} (${c.developers} developers, ${history} of history) at ${o.url}.`,
+    `The owner key is in ${o.file}, readable by you only, and is also this machine's push key. It is not printed.`,
+    ...(o.envKeyShadows
+      ? [
+          "SEATLEDGER_KEY is set in your environment and wins over the saved key: unset it to push to this team.",
+        ]
+      : []),
+    "",
+    "Send your teammates this invite link. Each runs, once:",
+    `  npx seatledger team join ${c.invite_url} --as <name>`,
+    "",
+    "On this machine:",
+    "  npx seatledger push --dry-run   # exactly what would be sent; sends nothing",
+    "  npx seatledger push",
+    "",
+    `Dashboard: ${o.dashboard}`,
+    `  Sign in with GitHub and attach this team with the owner key from ${o.file}.`,
+    `Creating the team accepted the terms at ${o.terms}.`,
+  ].join("\n");
+}
+
+export function renderCreateDryRun(plan: CreatePlan): string {
+  return [
+    `seatledger team create --dry-run: nothing was sent. This is exactly what would be POSTed to ${plan.url}${plan.route}:`,
+    JSON.stringify(plan.body, null, 2),
+    `The owner key it returns would be saved to ${plan.saveTo}, readable by you only.`,
+    `Creating a team accepts the terms at ${plan.terms}.`,
+  ].join("\n");
+}
+
 export async function teamStatus(ctx: TeamContext): Promise<unknown> {
   const cfg = readTeamConfig(ctx.home, ctx.env);
   if (!cfg) throw notOnTeam();
@@ -185,7 +357,7 @@ export async function teamSummary(
     throw new TeamApiError(
       "NO_TEAM_KEY",
       "this machine has not joined a seatledger team",
-      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or set SEATLEDGER_KEY",
+      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or `npx seatledger team create` to start a team, or set SEATLEDGER_KEY",
       false,
     );
   const q = since ? `?since=${encodeURIComponent(since)}` : "";

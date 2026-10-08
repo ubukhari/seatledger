@@ -23,7 +23,7 @@ seatledger reads the transcripts Claude Code and Codex already keep on your mach
 
 No vendor will build that last one: it is an alarm about their own rate. seatledger is MIT, has no
 telemetry and no runtime dependencies, and needs no account. It makes no network calls unless you
-join a [team ledger](#the-team-ledger) and run `seatledger push` — and then it sends daily
+create or join a [team ledger](#the-team-ledger) — and then `seatledger push` sends daily
 aggregates only, which `seatledger push --dry-run` prints in full.
 
 ## Commands
@@ -38,14 +38,15 @@ npx seatledger mcp                              # read-only MCP server on stdio
 npx seatledger demo                             # all of the above on synthetic history
 
 # the team ledger (optional; the only commands that send anything)
+npx seatledger team create --name "Acme platform"   # a free team for up to 3; prints the invite link
 npx seatledger team join <invite link> --as alice   # your key goes to ~/.seatledger/team.json (0600)
 npx seatledger push --dry-run                   # exactly what would be sent; sends nothing
 npx seatledger push                             # this machine's daily aggregates to the team
 npx seatledger team                             # the team's plan and your seat
 ```
 
-Every command takes `--json`, `--client claude-code|codex`, `--claude-dir`, `--codex-dir` and
-`--no-cache`. Without npm: `npx github:agentwares/seatledger` runs the same CLI from this
+Every command takes `--json`, `--client claude-code|codex`, `--claude-dir`, `--codex-dir`,
+`--no-cache` and `--quiet`. Without npm: `npx github:agentwares/seatledger` runs the same CLI from this
 repository (it ships its built `dist/`).
 
 ## What it reads
@@ -149,12 +150,34 @@ machine. That is the hosted team ledger, run by agentwares:
 | Team     | $49/month  | 10         | 13 months | email and Slack           | yes |
 | Business | $149/month | 50         | 13 months | email and Slack           | yes |
 
-The lead signs in with GitHub at
-[agentwares-agentcheck.vercel.app/seatledger](https://agentwares-agentcheck.vercel.app/seatledger),
-which creates the team, and shares its invite link. Each developer runs
+### Start one from the CLI
+
+```sh
+npx seatledger team create --name "Acme platform"   # optional: --email <alert address> --as <your name>
+```
+
+That creates a Free team and saves its owner key to `~/.seatledger/team.json` (readable by you
+only, never printed), exactly as `team join` saves a developer's key, so `npx seatledger push`
+works on this machine straight away. It prints the invite link to send your teammates — each runs
 `npx seatledger team join <link> --as <name>` once, then `npx seatledger push` (by hand, or from a
-cron or a session-end hook). An agent can create a free team with no human:
+cron or a session-end hook) — and the dashboard, where you sign in with GitHub and attach the team
+with the owner key to upgrade, invite and revoke. `--dry-run` prints exactly what would be sent
+and sends nothing. Creating a team accepts the
+[terms](https://agentwares-agentcheck.vercel.app/terms).
+
+Or sign in with GitHub at
+[agentwares-agentcheck.vercel.app/seatledger](https://agentwares-agentcheck.vercel.app/seatledger),
+which creates the team in the browser. An agent can create a free team with no human:
 `POST /api/seatledger/v1/teams {"accept_terms": true}` returns an owner key and an invite link.
+
+### The one line about it
+
+After `seatledger`, `seatledger report` and — when it found a step change — `seatledger rates`, a
+terminal shows one dim line pointing at `npx seatledger team create`, at most once a day per
+machine. It never appears with `--json`, in MCP output, when output is not a terminal, or once this
+machine is on a team. `--quiet` or `SEATLEDGER_QUIET=1` turns it off for good. It is text printed
+on your screen; the only state is the day it was last shown, in `~/.seatledger/hint.json`, and
+nothing is sent.
 
 ### Exactly what `push` sends
 
@@ -188,7 +211,8 @@ where your pushes go; `SEATLEDGER_URL` overrides it.
 
 **MCP** (`npx -y seatledger mcp`, stdio, read-only): `seatledger_usage_summary` and
 `seatledger_rate_changes` read this machine and make no request; `seatledger_team_summary` reads the
-team ledger this machine joined, with its saved key (one HTTPS request, changes nothing). Strict
+team ledger this machine created or joined, with its saved key (one HTTPS request, changes
+nothing). Strict
 input schemas, errors with `code`, `cause`, `fix`, `retryable`.
 
 ```sh
@@ -216,11 +240,13 @@ change.
 - Keeps counts, timestamps, request and session ids, model ids, client versions, working-directory
   folder names and the paths of the transcripts it read. It never stores or prints prompt, response, tool or file content: most transcript lines
   are skipped before they are parsed, and the records it keeps have no field that could hold text.
-- Writes only to `~/.seatledger` (`limits.json`, `cache-v1/`, and `team.json` once you join a
-  team), or `$SEATLEDGER_HOME`.
-- Has no runtime dependencies. Makes no network calls, except `seatledger push`, `seatledger team`
-  and the `seatledger_team_summary` tool, which talk to the team ledger you joined and send what is
-  listed under [Exactly what `push` sends](#exactly-what-push-sends).
+- Writes only to `~/.seatledger` (`limits.json`, `cache-v1/`, `hint.json` — the day the team
+  line was last shown — and `team.json` once you create or join a team), or `$SEATLEDGER_HOME`.
+- Has no runtime dependencies. Makes no network calls, except `seatledger team create` (the team
+  name and the alert address you pass), `seatledger team join`, `seatledger push`,
+  `seatledger team` and the `seatledger_team_summary` tool, which talk to the team ledger you
+  created or joined and send what is listed under
+  [Exactly what `push` sends](#exactly-what-push-sends).
 
 ## As a library
 

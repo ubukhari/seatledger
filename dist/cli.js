@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // src/main.ts
-import path8 from "path";
+import path9 from "path";
 import { parseArgs } from "util";
 
 // src/demo.ts
@@ -1677,7 +1677,8 @@ function writeSyntheticHistory(opts) {
                   window_minutes: 10080,
                   resets_at: resetsAt + 4 * 86400
                 },
-                plan_type: "pro"
+                // Plus: on 7 Oct 2026 OpenAI listed a five-hour limit for Plus and none for Pro
+                plan_type: "plus"
               }
             }
           })
@@ -2238,7 +2239,7 @@ var RATES_CONTEXT_DAYS = 90;
 var FIRST_PUSH_DAYS = 400;
 function notOnTeam() {
   return new TeamUsage(
-    "not on a team yet: run `seatledger team join <invite link> --as <name>`, or set SEATLEDGER_KEY"
+    "not on a team yet: run `seatledger team join <invite link> --as <name>`, or `seatledger team create` to start one, or set SEATLEDGER_KEY"
   );
 }
 async function planPush(ctx, opts) {
@@ -2330,6 +2331,125 @@ async function runJoin(ctx, invite, opts) {
   });
   return { joined, file, url };
 }
+var TEAM_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._&'-]{0,59}$/u;
+var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var invalid = (field, cause, fix) => new TeamApiError(`INVALID_${field}`, cause, fix, false);
+function planCreate(ctx, opts) {
+  const body = { accept_terms: true };
+  if (opts.name !== void 0) {
+    const name = opts.name.trim();
+    if (!TEAM_NAME.test(name))
+      throw invalid(
+        "NAME",
+        `--name "${opts.name}" is not a team name: up to 60 letters, digits, spaces and . _ & ' -, starting with a letter or digit`,
+        'pass a plain name, e.g. --name "Acme platform"'
+      );
+    body.name = name;
+  }
+  if (opts.as !== void 0) {
+    if (!validHandle(opts.as))
+      throw invalid(
+        "MEMBER",
+        `--as "${opts.as}" is not a developer name: a-z, 0-9, . _ - (up to 32), starting with a letter or digit`,
+        "pass a short lower-case name, e.g. --as alice"
+      );
+    body.member = opts.as;
+  }
+  if (opts.email !== void 0) {
+    const email = opts.email.trim();
+    if (!EMAIL.test(email) || email.length > 254)
+      throw invalid(
+        "EMAIL",
+        `--email "${opts.email}" is not an email address`,
+        "pass the address rate-change alerts should go to on a paid plan, e.g. --email lead@example.com"
+      );
+    body.owner_email = email;
+  }
+  const existing = savedTeam(ctx.home);
+  if (existing?.key && !opts.force)
+    throw new TeamApiError(
+      "ALREADY_ON_TEAM",
+      `this machine is already on ${existing.team ?? "a team"} as ${existing.member ?? "?"} (${teamFile(ctx.home)})`,
+      "run `seatledger team` to see that team; pass --force to replace its key with the new team's owner key",
+      false
+    );
+  const url = (ctx.env.SEATLEDGER_URL?.trim() || DEFAULT_URL).replace(/\/+$/, "");
+  return {
+    url,
+    route: "/api/seatledger/v1/teams",
+    body,
+    saveTo: teamFile(ctx.home),
+    terms: `${url}/terms`
+  };
+}
+async function runCreate(ctx, plan) {
+  const created = await callApi(plan.url, "POST", plan.route, {
+    body: plan.body,
+    ...ctx.fetch ? { fetch: ctx.fetch } : {}
+  });
+  if (typeof created.owner_key !== "string" || typeof created.invite_url !== "string")
+    throw new TeamApiError(
+      "BAD_RESPONSE",
+      `POST ${plan.route} did not return an owner key and an invite link`,
+      "check SEATLEDGER_URL points at the seatledger service",
+      false
+    );
+  const file = writeTeamConfig(ctx.home, {
+    url: plan.url,
+    key: created.owner_key,
+    teamId: created.team_id,
+    team: created.name,
+    member: created.member
+  });
+  return {
+    // everything the service said except the key, which is saved and never printed
+    created: {
+      team_id: created.team_id,
+      name: created.name,
+      plan: created.plan,
+      developers: created.developers,
+      history_days: created.history_days,
+      member: created.member,
+      invite_url: created.invite_url
+    },
+    url: plan.url,
+    file,
+    dashboard: `${plan.url}/seatledger/dashboard?ref=cli`,
+    terms: plan.terms,
+    envKeyShadows: Boolean(ctx.env.SEATLEDGER_KEY?.trim())
+  };
+}
+var planName = (tier) => tier.charAt(0).toUpperCase() + tier.slice(1);
+function renderCreate(o) {
+  const c = o.created;
+  const history = c.history_days >= 365 ? "13 months" : `${c.history_days} days`;
+  return [
+    `Created ${c.name} on seatledger ${planName(c.plan)} (${c.developers} developers, ${history} of history) at ${o.url}.`,
+    `The owner key is in ${o.file}, readable by you only, and is also this machine's push key. It is not printed.`,
+    ...o.envKeyShadows ? [
+      "SEATLEDGER_KEY is set in your environment and wins over the saved key: unset it to push to this team."
+    ] : [],
+    "",
+    "Send your teammates this invite link. Each runs, once:",
+    `  npx seatledger team join ${c.invite_url} --as <name>`,
+    "",
+    "On this machine:",
+    "  npx seatledger push --dry-run   # exactly what would be sent; sends nothing",
+    "  npx seatledger push",
+    "",
+    `Dashboard: ${o.dashboard}`,
+    `  Sign in with GitHub and attach this team with the owner key from ${o.file}.`,
+    `Creating the team accepted the terms at ${o.terms}.`
+  ].join("\n");
+}
+function renderCreateDryRun(plan) {
+  return [
+    `seatledger team create --dry-run: nothing was sent. This is exactly what would be POSTed to ${plan.url}${plan.route}:`,
+    JSON.stringify(plan.body, null, 2),
+    `The owner key it returns would be saved to ${plan.saveTo}, readable by you only.`,
+    `Creating a team accepts the terms at ${plan.terms}.`
+  ].join("\n");
+}
 async function teamStatus(ctx) {
   const cfg = readTeamConfig(ctx.home, ctx.env);
   if (!cfg) throw notOnTeam();
@@ -2344,7 +2464,7 @@ async function teamSummary(ctx, since) {
     throw new TeamApiError(
       "NO_TEAM_KEY",
       "this machine has not joined a seatledger team",
-      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or set SEATLEDGER_KEY",
+      "run `npx seatledger team join <invite link> --as <name>` (the team owner has the link), or `npx seatledger team create` to start a team, or set SEATLEDGER_KEY",
       false
     );
   const q = since ? `?since=${encodeURIComponent(since)}` : "";
@@ -2419,7 +2539,7 @@ var TOOLS = [
   {
     name: "seatledger_team_summary",
     title: "Team coding-agent ledger",
-    description: "The hosted seatledger team ledger this machine joined with `seatledger team join`: what the team's coding-agent seats and tokens bought, from every developer's pushed daily aggregates. Returns team totals; tables by day, month, developer, model and client; and the rate-change findings feed, each with its date, the developer, the client version and whether that was its first day, and what the step is consistent with. A developer's key sees every team total and only their own row in `by_developer`; the owner key sees every developer. Dollars are API-equivalent (the same tokens at API list prices), not what anyone was billed. History is as long as the team's plan keeps (Free 30 days, Team and Business 13 months). Needs the key `seatledger team join` saved in ~/.seatledger/team.json, or SEATLEDGER_KEY; without one it returns NO_TEAM_KEY. This tool makes one HTTPS request to that ledger and changes nothing.",
+    description: "The hosted seatledger team ledger this machine created or joined (`seatledger team create` or `seatledger team join`): what the team's coding-agent seats and tokens bought, from every developer's pushed daily aggregates. Returns team totals; tables by day, month, developer, model and client; and the rate-change findings feed, each with its date, the developer, the client version and whether that was its first day, and what the step is consistent with. A developer's key sees every team total and only their own row in `by_developer`; the owner key sees every developer. Dollars are API-equivalent (the same tokens at API list prices), not what anyone was billed. History is as long as the team's plan keeps (Free 30 days, Team and Business 13 months). Needs the key `seatledger team create` or `team join` saved in ~/.seatledger/team.json, or SEATLEDGER_KEY; without one it returns NO_TEAM_KEY. This tool makes one HTTPS request to that ledger and changes nothing.",
     inputSchema: {
       type: "object",
       properties: {
@@ -2516,7 +2636,7 @@ async function callTool(name, rawArgs, ctx = {}) {
     return { structured: { ...body }, isError: true };
   }
 }
-var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine joined, with its saved key.";
+var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
 async function handleMessage(msg, ctx) {
   if (Array.isArray(msg)) {
     const out = (await Promise.all(msg.map((m) => handleMessage(m, ctx)))).filter(
@@ -2605,6 +2725,45 @@ async function serveStdio(ctx = {}) {
   await Promise.all(pending);
 }
 
+// src/hint.ts
+import { existsSync as existsSync3, mkdirSync as mkdirSync5, readFileSync as readFileSync5, writeFileSync as writeFileSync5 } from "fs";
+import path8 from "path";
+var TEAM_HINT = "Your whole team in one ledger, free for up to 3 developers; 13 months of history and rate-change emails on Team: `npx seatledger team create`";
+var RATES_HINT = "Get changes like this by email for your whole team: `npx seatledger team create`.";
+var hintFile = (home) => path8.join(home, "hint.json");
+function quietFromEnv(env) {
+  const v = env.SEATLEDGER_QUIET?.trim().toLowerCase();
+  return v !== void 0 && v !== "" && v !== "0" && v !== "false";
+}
+function dim(text, env) {
+  if (env.NO_COLOR !== void 0 && env.NO_COLOR !== "") return text;
+  if (env.TERM === "dumb") return text;
+  return `\x1B[2m${text}\x1B[22m`;
+}
+function lastShown(home) {
+  const file = hintFile(home);
+  if (!existsSync3(file)) return null;
+  try {
+    const v = JSON.parse(readFileSync5(file, "utf8")).last_shown;
+    return typeof v === "string" ? v : null;
+  } catch {
+    return null;
+  }
+}
+function teamHint(ctx, kind) {
+  if (!ctx.tty || ctx.quiet || quietFromEnv(ctx.env)) return null;
+  if (readTeamConfig(ctx.home, ctx.env)) return null;
+  const today = dayKey(ctx.now);
+  if (lastShown(ctx.home) === today) return null;
+  try {
+    mkdirSync5(ctx.home, { recursive: true });
+    writeFileSync5(hintFile(ctx.home), JSON.stringify({ last_shown: today }) + "\n");
+  } catch {
+    return null;
+  }
+  return dim(kind === "rates" ? RATES_HINT : TEAM_HINT, ctx.env);
+}
+
 // src/main.ts
 var HELP = `seatledger ${version()} \u2014 what your coding-agent seats and tokens bought, from this machine
 
@@ -2621,6 +2780,12 @@ Usage
   seatledger demo                    the summary and rates on synthetic history (reads nothing of yours)
 
 Team ledger (optional; the only commands that send anything)
+  seatledger team create [--name <team>] [--email <alert address>] [--as <name>] [--dry-run]
+                                     start a team (free for up to 3 developers): the owner key is
+                                     saved to ~/.seatledger/team.json (0600); prints the invite link
+                                     for teammates and the dashboard. --dry-run shows what would be
+                                     sent. Creating a team accepts the terms at
+                                     ${DEFAULT_URL}/terms
   seatledger team join <invite link> [--as <name>] [--force]
                                      join a team; your key is saved to ~/.seatledger/team.json (0600)
   seatledger team                    the team's plan and your seat
@@ -2639,10 +2804,17 @@ Options
                                      ~/.claude/projects, ~/.config/claude/projects)
   --codex-dir <dir>                  Codex sessions dir (default $CODEX_HOME/sessions, ~/.codex/sessions)
   --no-cache                         do not read or write ~/.seatledger/cache-v1
+  --quiet                            no team-ledger line (also SEATLEDGER_QUIET=1)
   -h, --help / -v, --version
 
+After the summary, report and rates, a terminal shows at most one dim line a day about the team
+ledger, and none once this machine is on a team, with --json, or when output is not a terminal.
+--quiet or SEATLEDGER_QUIET=1 turns it off. It is printed here; nothing is sent.
+
 Dollars are API-equivalent: the same tokens at the vendor's API list prices. Not your bill.
-Nothing is sent anywhere unless you run push or team. https://github.com/agentwares/seatledger`;
+Nothing is sent anywhere unless you run team create, team join, team or push.
+Team ledger: ${DEFAULT_URL}/seatledger?ref=cli
+Source: https://github.com/agentwares/seatledger`;
 var UsageError = class extends Error {
 };
 function parseAmount(v, flag) {
@@ -2672,6 +2844,9 @@ async function main(argv, io = { out: process.stdout, err: process.stderr }, dep
         "project-names": { type: "boolean" },
         as: { type: "string" },
         force: { type: "boolean" },
+        name: { type: "string" },
+        email: { type: "string" },
+        quiet: { type: "boolean" },
         since: { type: "string" },
         by: { type: "string" },
         client: { type: "string" },
@@ -2703,6 +2878,13 @@ Run seatledger --help for usage.
   const clockNow = () => Number.isFinite(fixedNow) ? fixedNow : Date.now();
   const now = clockNow();
   const json = (v) => print(JSON.stringify(v, null, 2));
+  const hint = (kind) => {
+    const line = teamHint(
+      { home, now, env: process.env, tty: io.out.isTTY === true, quiet: flags.quiet ?? false },
+      kind
+    );
+    if (line) print(line);
+  };
   try {
     const client = oneOf(flags.client, CLIENTS, "--client");
     const loadOpts = {
@@ -2712,7 +2894,7 @@ Run seatledger --help for usage.
       onRead: (n) => {
         if (n > 50 && !flags.json)
           io.err.write(
-            `seatledger: reading ${n} transcripts (later runs reuse the counts kept in ${path8.join(home, "cache-v1")})\u2026
+            `seatledger: reading ${n} transcripts (later runs reuse the counts kept in ${path9.join(home, "cache-v1")})\u2026
 `
           );
       }
@@ -2722,7 +2904,10 @@ Run seatledger --help for usage.
         const loaded = await load(loadOpts);
         const v = summaryView(loaded, now, home, client);
         if (flags.json) json(v);
-        else print(renderSummary(v, now));
+        else {
+          print(renderSummary(v, now));
+          hint("team");
+        }
         return 0;
       }
       case "report": {
@@ -2731,7 +2916,10 @@ Run seatledger --help for usage.
         const loaded = await load({ ...loadOpts, since });
         const v = reportView(loaded, now, by, since, client);
         if (flags.json) json(v);
-        else print(renderReport(v));
+        else {
+          print(renderReport(v));
+          hint("team");
+        }
         return 0;
       }
       case "rates": {
@@ -2746,7 +2934,10 @@ Run seatledger --help for usage.
           minRequests ? { minRequests } : {}
         );
         if (flags.json) json(v);
-        else print(renderRates(v));
+        else {
+          print(renderRates(v));
+          if (v.findings.length > 0) hint("rates");
+        }
         return 0;
       }
       case "limits": {
@@ -2797,6 +2988,38 @@ Run seatledger --help for usage.
       }
       case "team": {
         const ctx = teamContext(loadOpts);
+        if (sub === "create") {
+          const plan = planCreate(ctx, {
+            ...flags.name !== void 0 ? { name: flags.name } : {},
+            ...flags.email !== void 0 ? { email: flags.email } : {},
+            ...flags.as !== void 0 ? { as: flags.as } : {},
+            ...flags.force ? { force: true } : {}
+          });
+          if (flags["dry-run"]) {
+            if (flags.json)
+              json({
+                dry_run: true,
+                method: "POST",
+                url: plan.url + plan.route,
+                body: plan.body,
+                saves_to: plan.saveTo,
+                terms: plan.terms
+              });
+            else print(renderCreateDryRun(plan));
+            return 0;
+          }
+          const created = await runCreate(ctx, plan);
+          if (flags.json)
+            json({
+              ...created.created,
+              saved_to: created.file,
+              url: created.url,
+              dashboard_url: created.dashboard,
+              terms: created.terms
+            });
+          else print(renderCreate(created));
+          return 0;
+        }
         if (sub === "join") {
           const r = await runJoin(ctx, positionals[2], {
             ...flags.as !== void 0 ? { as: flags.as } : {},
@@ -2811,7 +3034,8 @@ Next: \`npx seatledger push --dry-run\` shows exactly what would be sent; \`npx 
             );
           return 0;
         }
-        if (sub !== void 0) throw new UsageError(`team takes join, or nothing; not "${sub}"`);
+        if (sub !== void 0)
+          throw new UsageError(`team takes create or join, or nothing; not "${sub}"`);
         const status = await teamStatus(ctx);
         if (flags.json) json(status);
         else print(renderTeam(status));
@@ -2842,9 +3066,13 @@ Run seatledger --help for usage.
     }
     if (err instanceof TeamApiError) {
       if (flags.json) io.err.write(JSON.stringify(err.toJSON(), null, 2) + "\n");
-      else io.err.write(`seatledger: ${err.code}: ${err.cause_}
+      else
+        io.err.write(
+          `seatledger: ${err.code}: ${err.cause_}
   fix: ${err.fix}
-`);
+  retryable: ${err.retryable ? "yes" : "no"}
+`
+        );
       return 1;
     }
     io.err.write(`seatledger: ${err instanceof Error ? err.message : String(err)}
@@ -2867,8 +3095,17 @@ function renderTeam(status) {
   return [
     `${s.name ?? "Your team"}: seatledger ${s.plan?.name ?? "?"} \u2014 ${s.seats_used ?? "?"} of ${s.plan?.developers ?? "?"} developers, ${s.plan?.history_days ?? "?"} days of history.`,
     s.you?.member ? `You are ${s.you.member} (${s.you.role}), seat ${me?.seat ?? "?"}${me && !me.can_push ? " \u2014 past the plan's cap, so pushes are refused until the owner upgrades or frees a seat" : ""}.` : "",
-    s.dashboard_url ? `Dashboard (team owner): ${s.dashboard_url}` : ""
+    s.dashboard_url ? `Dashboard (team owner): ${withRef(s.dashboard_url)}` : ""
   ].filter(Boolean).join("\n");
+}
+function withRef(url) {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ref", "cli");
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 // src/cli.ts

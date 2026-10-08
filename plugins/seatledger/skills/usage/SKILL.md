@@ -2,9 +2,6 @@
 name: usage
 description: Explain what this machine's Claude Code and Codex usage bought - tokens and API-equivalent dollars today and over the last 7 days, by client and model, progress against limits the user set, and the rate-limit readings Codex wrote locally - by running seatledger, which reads local transcripts only. Use when the user asks what their coding agents cost, how much they used, where their tokens went, or how close they are to a limit.
 argument-hint: "[--since 30d] [--by day|project|model|client] [--client claude-code|codex]"
-allowed-tools:
-  - Bash(npx -y seatledger@latest)
-  - Bash(npx -y seatledger@latest *)
 ---
 
 # Explain what this machine's coding-agent usage bought
@@ -14,7 +11,8 @@ Codex rollouts (`~/.codex/sessions`) on this machine and prints counts. It makes
 and sends nothing anywhere. The first run reads every transcript and can take a little while;
 later runs reuse the counts it keeps in `~/.seatledger`.
 
-Run, with no arguments for the summary:
+Run it with the Bash tool, with no arguments for the summary (Claude Code asks the user to approve
+the command; this skill pre-approves nothing):
 
 ```sh
 npx -y seatledger@latest

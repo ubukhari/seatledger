@@ -5,7 +5,8 @@
  * those at its root, so their checks run in the monorepo only; `scripts/sync-oss-repos.sh`
  * re-validates them when it copies them.
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { runDemo, screenshotText, textToSvg } from "./demo.js";
 import { TOOLS } from "./mcp.js";
@@ -125,7 +126,6 @@ describe.skipIf(!existsSync(here(root)))("repo-root files (distribution/root)", 
       expect(front.description!.length).toBeGreaterThan(80);
       const run = skill === "usage" ? "npx -y seatledger@latest" : "npx -y seatledger@latest rates";
       expect(text).toContain(run);
-      expect(text).toContain(`Bash(${run})`);
       expect(text).not.toMatch(/limits (set|clear) .*\$ARGUMENTS/);
     }
     for (const command of ["usage", "rates"]) {
@@ -138,5 +138,58 @@ describe.skipIf(!existsSync(here(root)))("repo-root files (distribution/root)", 
           : "npx -y seatledger@latest rates {{args}}",
       );
     }
+  });
+
+  it("no skill, command or agent pre-approves a tool: Claude Code asks before every command", () => {
+    // Anthropic's directory holds any allowed-tools for review as "pre-approves broad shell
+    // access", even a form naming the exact command (its validator, 8 Oct 2026).
+    const walk = (dir: string): string[] =>
+      readdirSync(here(dir), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`],
+      );
+    const files = walk(`${root}/plugins`);
+    const markdown = files.filter((f) => f.endsWith(".md"));
+    expect(markdown.filter((f) => f.endsWith("/SKILL.md"))).toHaveLength(2);
+    for (const f of markdown) {
+      const text = read(f);
+      const front = text.startsWith("---") ? (text.split("---")[1] ?? "") : "";
+      expect(front, f).not.toMatch(/^\s*(allowed-tools|allowedTools)\s*:/m);
+    }
+    for (const f of [
+      ...files.filter((x) => x.endsWith(".json")),
+      `${root}/.claude-plugin/marketplace.json`,
+    ])
+      expect(read(f), f).not.toMatch(/allowed-?tools/i);
+  });
+
+  it("the listing icon is a square PNG of 512-2048 px under 2 MB, drawn from distribution/icon.svg (`pnpm icon`)", () => {
+    const plugin = json<{ icon?: string }>(`${root}/plugins/seatledger/.claude-plugin/plugin.json`);
+    expect(plugin.icon).toBe("./.claude-plugin/icon.png");
+    const file = `${root}/plugins/seatledger/${plugin.icon!.slice(2)}`;
+    const png = readFileSync(here(file));
+    expect(statSync(here(file)).size).toBeLessThan(2 * 1024 * 1024);
+    expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(png.subarray(12, 16).toString("latin1")).toBe("IHDR");
+    const width = png.readUInt32BE(16);
+    expect(png.readUInt32BE(20)).toBe(width);
+    expect(width).toBeGreaterThanOrEqual(512);
+    expect(width).toBeLessThanOrEqual(2048);
+    // the tEXt chunk scripts/icon.mjs writes: the SHA-256 of the SVG the PNG was drawn from
+    const key = "seatledger-icon-source-sha256\0";
+    const at = png.indexOf(key, 0, "latin1");
+    expect(at, "icon.png carries no source hash: run `pnpm icon`").toBeGreaterThan(0);
+    const drawnFrom = png.subarray(at + key.length, at + key.length + 64).toString("latin1");
+    const svg = createHash("sha256").update(read("distribution/icon.svg")).digest("hex");
+    expect(drawnFrom, "distribution/icon.svg changed: run `pnpm icon`").toBe(svg);
+  });
+
+  it("the plugin folder has the README the directory lists it by, naming what it runs", () => {
+    const readme = read(`${root}/plugins/seatledger/README.md`);
+    const prose = readme.replace(/```[\s\S]*?```/g, "");
+    expect(prose.split(/\s+/).filter(Boolean).length).toBeGreaterThanOrEqual(40);
+    expect(readme).toContain("npx -y seatledger@latest");
+    expect(readme).toContain("pre-approve nothing");
+    // the directory holds a version whose text names a bundled image in code
+    expect(readme).not.toMatch(/`[^`]*\.png[^`]*`/);
   });
 });

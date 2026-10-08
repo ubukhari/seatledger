@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.agentwares/seatledger",
   "description": "Local ledger of Claude Code and Codex tokens, API-equivalent cost, limits and token-rate changes.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "repository": {
     "url": "https://github.com/agentwares/seatledger",
     "source": "github"
@@ -14,7 +14,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "seatledger",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"
@@ -46,7 +46,7 @@
         },
         {
           "name": "SEATLEDGER_KEY",
-          "description": "Team ledger push key for seatledger_team_summary, if not saved by `seatledger team join`",
+          "description": "Team ledger push key for seatledger_team_summary, if not saved by `seatledger team join` or `team create`",
           "isRequired": false,
           "isSecret": true,
           "format": "string"

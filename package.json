@@ -1,7 +1,7 @@
 {
   "name": "seatledger",
-  "version": "0.2.0",
-  "description": "What your coding-agent seats and tokens buy, from your own machine: Claude Code and Codex tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and a flag when the rate changes. Local and account-free; nothing is sent unless you join a team ledger and run push, which sends daily aggregates only.",
+  "version": "0.2.1",
+  "description": "What your coding-agent seats and tokens buy, from your own machine: Claude Code and Codex tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and a flag when the rate changes. Local and account-free; nothing is sent unless you create or join a team ledger, and push sends daily aggregates only.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -56,6 +56,7 @@
     "lint": "eslint src",
     "test": "vitest run",
     "screenshot": "node scripts/screenshot.mjs",
+    "icon": "node scripts/icon.mjs",
     "pretest": "pnpm run build:dist",
     "pretypecheck": "pnpm run build:dist",
     "format:check": "prettier --check .",

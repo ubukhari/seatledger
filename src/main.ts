@@ -7,11 +7,14 @@
  *   seatledger limits [set|clear]   your own limits and the burn toward them
  *   seatledger mcp                  the same, as a read-only MCP server on stdio
  *   seatledger demo                 all of it on synthetic history, without reading yours
- *   seatledger team join | team     join a hosted team ledger; its plan and your seat
+ *   seatledger team create | join   start a hosted team ledger, or join one
+ *   seatledger team                 its plan and your seat
  *   seatledger push [--dry-run]     this machine's aggregates to that team ledger
  *
- * Reads local transcripts only. No telemetry, no account. The only network requests are `push`,
- * `team` and the `seatledger_team_summary` tool, to the team ledger you joined.
+ * Reads local transcripts only. No telemetry, no account. The only network requests are
+ * `team create`, `team join`, `team`, `push` and the `seatledger_team_summary` tool, to the team
+ * ledger you created or joined. After the summary, `report` and `rates`, a terminal may show one
+ * dim line about the team ledger, at most once a day (src/hint.ts); it is local text.
  */
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -28,12 +31,17 @@ import {
 import { load, type LoadOptions } from "./load.js";
 import { serveStdio } from "./mcp.js";
 import { seatledgerHome, sourceDirs } from "./paths.js";
+import { teamHint, type HintKind } from "./hint.js";
 import { renderLimits, renderRates, renderReport, renderSummary } from "./render.js";
-import { TeamApiError, type FetchLike } from "./team.js";
+import { DEFAULT_URL, TeamApiError, type FetchLike } from "./team.js";
 import {
+  planCreate,
   planPush,
+  renderCreate,
+  renderCreateDryRun,
   renderDryRun,
   renderPush,
+  runCreate,
   runJoin,
   runPush,
   teamStatus,
@@ -59,6 +67,12 @@ Usage
   seatledger demo                    the summary and rates on synthetic history (reads nothing of yours)
 
 Team ledger (optional; the only commands that send anything)
+  seatledger team create [--name <team>] [--email <alert address>] [--as <name>] [--dry-run]
+                                     start a team (free for up to 3 developers): the owner key is
+                                     saved to ~/.seatledger/team.json (0600); prints the invite link
+                                     for teammates and the dashboard. --dry-run shows what would be
+                                     sent. Creating a team accepts the terms at
+                                     ${DEFAULT_URL}/terms
   seatledger team join <invite link> [--as <name>] [--force]
                                      join a team; your key is saved to ~/.seatledger/team.json (0600)
   seatledger team                    the team's plan and your seat
@@ -77,10 +91,17 @@ Options
                                      ~/.claude/projects, ~/.config/claude/projects)
   --codex-dir <dir>                  Codex sessions dir (default $CODEX_HOME/sessions, ~/.codex/sessions)
   --no-cache                         do not read or write ~/.seatledger/cache-v1
+  --quiet                            no team-ledger line (also SEATLEDGER_QUIET=1)
   -h, --help / -v, --version
 
+After the summary, report and rates, a terminal shows at most one dim line a day about the team
+ledger, and none once this machine is on a team, with --json, or when output is not a terminal.
+--quiet or SEATLEDGER_QUIET=1 turns it off. It is printed here; nothing is sent.
+
 Dollars are API-equivalent: the same tokens at the vendor's API list prices. Not your bill.
-Nothing is sent anywhere unless you run push or team. https://github.com/agentwares/seatledger`;
+Nothing is sent anywhere unless you run team create, team join, team or push.
+Team ledger: ${DEFAULT_URL}/seatledger?ref=cli
+Source: https://github.com/agentwares/seatledger`;
 
 class UsageError extends Error {}
 
@@ -104,9 +125,9 @@ function oneOf<T extends string>(
   return value as T;
 }
 
-/** Where output goes; tests pass their own. */
+/** Where output goes; tests pass their own. `out.isTTY` decides whether the team line may show. */
 export interface Io {
-  out: { write(chunk: string): unknown };
+  out: { write(chunk: string): unknown; isTTY?: boolean };
   err: { write(chunk: string): unknown };
 }
 
@@ -132,6 +153,9 @@ export async function main(
         "project-names": { type: "boolean" },
         as: { type: "string" },
         force: { type: "boolean" },
+        name: { type: "string" },
+        email: { type: "string" },
+        quiet: { type: "boolean" },
         since: { type: "string" },
         by: { type: "string" },
         client: { type: "string" },
@@ -163,6 +187,14 @@ export async function main(
   const clockNow = () => (Number.isFinite(fixedNow) ? fixedNow : Date.now());
   const now = clockNow();
   const json = (v: unknown) => print(JSON.stringify(v, null, 2));
+  /** The one line about the team ledger, when it may show (src/hint.ts). */
+  const hint = (kind: HintKind) => {
+    const line = teamHint(
+      { home, now, env: process.env, tty: io.out.isTTY === true, quiet: flags.quiet ?? false },
+      kind,
+    );
+    if (line) print(line);
+  };
 
   try {
     const client = oneOf(flags.client, CLIENTS, "--client");
@@ -183,7 +215,10 @@ export async function main(
         const loaded = await load(loadOpts);
         const v = summaryView(loaded, now, home, client);
         if (flags.json) json(v);
-        else print(renderSummary(v, now));
+        else {
+          print(renderSummary(v, now));
+          hint("team");
+        }
         return 0;
       }
       case "report": {
@@ -192,7 +227,10 @@ export async function main(
         const loaded = await load({ ...loadOpts, since });
         const v = reportView(loaded, now, by, since, client);
         if (flags.json) json(v);
-        else print(renderReport(v));
+        else {
+          print(renderReport(v));
+          hint("team");
+        }
         return 0;
       }
       case "rates": {
@@ -209,7 +247,10 @@ export async function main(
           minRequests ? { minRequests } : {},
         );
         if (flags.json) json(v);
-        else print(renderRates(v));
+        else {
+          print(renderRates(v));
+          if (v.findings.length > 0) hint("rates");
+        }
         return 0;
       }
       case "limits": {
@@ -263,6 +304,38 @@ export async function main(
       }
       case "team": {
         const ctx = teamContext(loadOpts);
+        if (sub === "create") {
+          const plan = planCreate(ctx, {
+            ...(flags.name !== undefined ? { name: flags.name } : {}),
+            ...(flags.email !== undefined ? { email: flags.email } : {}),
+            ...(flags.as !== undefined ? { as: flags.as } : {}),
+            ...(flags.force ? { force: true } : {}),
+          });
+          if (flags["dry-run"]) {
+            if (flags.json)
+              json({
+                dry_run: true,
+                method: "POST",
+                url: plan.url + plan.route,
+                body: plan.body,
+                saves_to: plan.saveTo,
+                terms: plan.terms,
+              });
+            else print(renderCreateDryRun(plan));
+            return 0;
+          }
+          const created = await runCreate(ctx, plan);
+          if (flags.json)
+            json({
+              ...created.created,
+              saved_to: created.file,
+              url: created.url,
+              dashboard_url: created.dashboard,
+              terms: created.terms,
+            });
+          else print(renderCreate(created));
+          return 0;
+        }
         if (sub === "join") {
           const r = await runJoin(ctx, positionals[2], {
             ...(flags.as !== undefined ? { as: flags.as } : {}),
@@ -277,7 +350,8 @@ export async function main(
             );
           return 0;
         }
-        if (sub !== undefined) throw new UsageError(`team takes join, or nothing; not "${sub}"`);
+        if (sub !== undefined)
+          throw new UsageError(`team takes create or join, or nothing; not "${sub}"`);
         const status = await teamStatus(ctx);
         if (flags.json) json(status);
         else print(renderTeam(status));
@@ -306,7 +380,10 @@ export async function main(
     }
     if (err instanceof TeamApiError) {
       if (flags.json) io.err.write(JSON.stringify(err.toJSON(), null, 2) + "\n");
-      else io.err.write(`seatledger: ${err.code}: ${err.cause_}\n  fix: ${err.fix}\n`);
+      else
+        io.err.write(
+          `seatledger: ${err.code}: ${err.cause_}\n  fix: ${err.fix}\n  retryable: ${err.retryable ? "yes" : "no"}\n`,
+        );
       return 1;
     }
     io.err.write(`seatledger: ${err instanceof Error ? err.message : String(err)}\n`);
@@ -340,8 +417,19 @@ function renderTeam(status: unknown): string {
     s.you?.member
       ? `You are ${s.you.member} (${s.you.role}), seat ${me?.seat ?? "?"}${me && !me.can_push ? " — past the plan's cap, so pushes are refused until the owner upgrades or frees a seat" : ""}.`
       : "",
-    s.dashboard_url ? `Dashboard (team owner): ${s.dashboard_url}` : "",
+    s.dashboard_url ? `Dashboard (team owner): ${withRef(s.dashboard_url)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+/** Links the CLI prints to the seatledger pages carry ?ref=cli, which the page's beacon records. */
+function withRef(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ref", "cli");
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
