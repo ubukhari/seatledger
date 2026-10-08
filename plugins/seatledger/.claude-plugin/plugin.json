@@ -6,8 +6,12 @@
     "name": "agentwares",
     "url": "https://github.com/agentwares"
   },
-  "homepage": "https://github.com/agentwares/seatledger#readme",
+  "homepage": "https://agentwares-agentcheck.vercel.app/seatledger",
+  "documentationUrl": "https://github.com/agentwares/seatledger#readme",
   "repository": "https://github.com/agentwares/seatledger",
+  "privacyPolicyUrl": "https://agentwares-agentcheck.vercel.app/privacy",
+  "termsOfServiceUrl": "https://agentwares-agentcheck.vercel.app/terms",
+  "supportUrl": "https://agentwares.vercel.app/contact",
   "license": "MIT",
   "icon": "./.claude-plugin/icon.png",
   "keywords": [
