@@ -1,0 +1,21 @@
+{
+  "name": "seatledger",
+  "version": "0.2.0",
+  "description": "What this machine's Claude Code and Codex seats and tokens bought: tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and step changes in token rates. Runs npx seatledger locally; no account, no network, no LLM calls of its own.",
+  "author": {
+    "name": "agentwares",
+    "url": "https://github.com/agentwares"
+  },
+  "homepage": "https://github.com/agentwares/seatledger#readme",
+  "repository": "https://github.com/agentwares/seatledger",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "token-usage",
+    "cost",
+    "usage-limits",
+    "rate-limits",
+    "prompt-caching"
+  ]
+}

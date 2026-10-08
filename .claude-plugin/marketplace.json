@@ -1,0 +1,25 @@
+{
+  "name": "seatledger",
+  "description": "seatledger, the local ledger of what your coding-agent seats and tokens buy, from inside Claude Code: tokens and API-equivalent dollars by day, project, model and client, and step changes in how requests use tokens. Open source, no account, nothing sent anywhere.",
+  "owner": {
+    "name": "agentwares",
+    "url": "https://github.com/agentwares"
+  },
+  "plugins": [
+    {
+      "name": "seatledger",
+      "source": "./plugins/seatledger",
+      "description": "Read what this machine's Claude Code and Codex usage bought. /seatledger:usage runs `npx seatledger` and explains today, the last 7 days and your limits; /seatledger:rates runs `npx seatledger rates` and explains any step change in tokens per request, cache use or quota per token.",
+      "category": "productivity",
+      "tags": [
+        "claude-code",
+        "codex",
+        "token-usage",
+        "cost",
+        "usage-limits",
+        "rate-limits",
+        "prompt-caching"
+      ]
+    }
+  ]
+}

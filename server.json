@@ -1,0 +1,57 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.agentwares/seatledger",
+  "description": "Local ledger of Claude Code and Codex tokens, API-equivalent cost, limits and token-rate changes.",
+  "version": "0.2.0",
+  "repository": {
+    "url": "https://github.com/agentwares/seatledger",
+    "source": "github"
+  },
+  "title": "seatledger",
+  "websiteUrl": "https://github.com/agentwares/seatledger",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "seatledger",
+      "version": "0.2.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "CLAUDE_CONFIG_DIR",
+          "description": "Claude Code's config directory, if not ~/.claude; transcripts are read from its projects/ folder",
+          "isRequired": false,
+          "format": "filepath"
+        },
+        {
+          "name": "CODEX_HOME",
+          "description": "Codex's home directory, if not ~/.codex; rollouts are read from its sessions/ folder",
+          "isRequired": false,
+          "format": "filepath"
+        },
+        {
+          "name": "SEATLEDGER_HOME",
+          "description": "Where seatledger keeps your limits and its cache of counts (default ~/.seatledger)",
+          "isRequired": false,
+          "format": "filepath"
+        },
+        {
+          "name": "SEATLEDGER_KEY",
+          "description": "Team ledger push key for seatledger_team_summary, if not saved by `seatledger team join`",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

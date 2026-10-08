@@ -1,0 +1,27 @@
+# /seatledger:usage — explain what this machine's coding-agent usage bought.
+description = "Explain this machine's Claude Code and Codex tokens and API-equivalent dollars, today and over 7 days, and your limits."
+prompt = """
+Explain what this machine's coding-agent usage bought. seatledger (`seatledger` on npm, MIT) reads
+Claude Code transcripts (~/.claude/projects) and Codex rollouts (~/.codex/sessions) locally and
+prints counts; it makes no network calls and sends nothing anywhere. The first run reads every
+transcript and can take a little while.
+
+1. Run with the shell tool (the user confirms the command):
+   npx -y seatledger@latest
+   If the user gave arguments ({{args}}), run `npx -y seatledger@latest report {{args}}` instead.
+
+2. Explain the output in plain words:
+   - today and the week: total tokens and API-equivalent dollars, which client and model carry
+     most of it, and the busiest day;
+   - say once that API-equivalent means the same tokens at the vendor's API list prices, not what
+     the user paid: a seat is a flat fee, and this is what its usage would cost on the API;
+   - where the tokens went: cache reads are usually most tokens and cheapest per token; cache
+     writes and output are where the dollars concentrate. `report --by project` breaks it down;
+   - limits: read back each line (used, burn rate, when the limit is reached at that rate, or that
+     the window resets first). If none are set, say seatledger does not guess vendor plan limits
+     and `npx -y seatledger@latest limits set --window 5h --tokens <N>` records the user's own;
+   - vendor readings: repeat Codex's own 5-hour and weekly percentages as Codex reported them.
+
+3. A `*` marks totals that exclude models with no API list price; their tokens are still counted.
+   If no transcripts were found, say where it looked. Do not change limits unless asked.
+"""

@@ -1,0 +1,5 @@
+{
+  "name": "seatledger",
+  "version": "0.2.0",
+  "description": "What this machine's coding-agent seats and tokens bought, read from local Claude Code and Codex transcripts: tokens and API-equivalent dollars, your limits, and step changes in token rates. /seatledger:usage explains the ledger; /seatledger:rates explains any rate change."
+}

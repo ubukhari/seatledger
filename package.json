@@ -1,0 +1,78 @@
+{
+  "name": "seatledger",
+  "version": "0.2.0",
+  "description": "What your coding-agent seats and tokens buy, from your own machine: Claude Code and Codex tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and a flag when the rate changes. Local and account-free; nothing is sent unless you join a team ledger and run push, which sends daily aggregates only.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "seatledger": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "server.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "mcpName": "io.github.agentwares/seatledger",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentwares/seatledger.git"
+  },
+  "homepage": "https://github.com/agentwares/seatledger#readme",
+  "bugs": {
+    "url": "https://github.com/agentwares/seatledger/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "token-usage",
+    "cost",
+    "usage-limits",
+    "rate-limits",
+    "prompt-caching",
+    "llm-cost",
+    "ai-coding",
+    "coding-agents",
+    "mcp",
+    "mcp-server",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run",
+    "screenshot": "node scripts/screenshot.mjs",
+    "pretest": "pnpm run build:dist",
+    "pretypecheck": "pnpm run build:dist",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "build:dist": "tsup"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.4",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.4.1",
+    "eslint": "^10.9.1",
+    "prettier": "^3.9.6",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^4.1.11"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="917" height="933" viewBox="0 0 917 933" role="img" aria-label="seatledger output on synthetic history">
+  <style>text{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;fill:#d4d4d4}.cmd{fill:#7ee787}</style>
+  <rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+  <text x="16" y="29" class="cmd" textLength="126.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">$ npx seatledger</text>
+  <text x="16" y="46" textLength="616.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">seatledger — what your coding-agent seats and tokens bought, from this machine</text>
+  <text x="16" y="63" xml:space="preserve"></text>
+  <text x="16" y="80" textLength="126.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Today, Wed 7 Oct</text>
+  <text x="16" y="97" textLength="884.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">                                           requests  input  output  cache write  cache read  tokens  API-equiv $</text>
+  <text x="16" y="114" textLength="884.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Claude Code · claude-opus-5-5                 122   1.1K    115K        5.29M       5.37M   10.8M       $29.81</text>
+  <text x="16" y="131" textLength="884.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex · gpt-5.6-sol                            28    98K     23K          46K        882K   1.05M        $1.43</text>
+  <text x="16" y="148" textLength="884.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Claude Code · claude-haiku-4-5-20251001         9   8.1K     360            0           0    8.5K        $0.01</text>
+  <text x="16" y="165" textLength="884.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  total                                         159   107K    138K        5.33M       6.25M   11.8M       $31.25</text>
+  <text x="16" y="182" xml:space="preserve"></text>
+  <text x="16" y="199" textLength="268.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Last 7 days, Thu 1 Oct – Wed 7 Oct</text>
+  <text x="16" y="216" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">             requests  input  output  cache write  cache read  tokens  API-equiv $</text>
+  <text x="16" y="233" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Thu 1 Oct       100   119K     83K        2.17M       3.66M   6.03M       $13.88</text>
+  <text x="16" y="250" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Fri 2 Oct       118   109K    113K        2.57M       5.53M   8.32M       $16.80</text>
+  <text x="16" y="267" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Sat 3 Oct        48   3.1K     44K        1.54M       2.52M   4.10M        $9.07</text>
+  <text x="16" y="284" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Sun 4 Oct        39   3.0K     33K        1.37M       1.35M   2.75M        $7.75</text>
+  <text x="16" y="301" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Mon 5 Oct       110   188K     96K        2.58M       4.11M   6.98M       $16.70</text>
+  <text x="16" y="318" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Tue 6 Oct       140   107K    127K        3.60M       5.48M   9.32M       $22.21</text>
+  <text x="16" y="335" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Wed 7 Oct       159   107K    138K        5.33M       6.25M   11.8M       $31.25</text>
+  <text x="16" y="352" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  total           714   637K    634K        19.1M       28.9M   49.3M      $117.65</text>
+  <text x="16" y="369" xml:space="preserve"></text>
+  <text x="16" y="386" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Limits: none set. `seatledger limits set --window 5h --tokens N` records your own;</text>
+  <text x="16" y="403" textLength="402.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  seatledger does not guess a vendor's plan limits.</text>
+  <text x="16" y="420" textLength="426.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Vendor readings, as the client last wrote them to disk</text>
+  <text x="16" y="437" textLength="537.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex 5-hour window: 26% used, resets 18:00, plan pro (read 13:43)</text>
+  <text x="16" y="454" textLength="616.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  Codex weekly window: 7% used, resets Sun 11 Oct 18:00, plan pro (read 13:43)</text>
+  <text x="16" y="471" xml:space="preserve"></text>
+  <text x="16" y="488" textLength="734.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">API-equiv $ = what these tokens would cost at the vendor's API list prices. Not what you were</text>
+  <text x="16" y="505" textLength="387.1" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  billed; a seat is a flat fee with an allowance.</text>
+  <text x="16" y="522" textLength="766.3" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Read 180 Claude Code transcripts and 32 Codex transcripts, on this machine only. Nothing was sent</text>
+  <text x="16" y="539" textLength="86.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  anywhere.</text>
+  <text x="16" y="556" textLength="805.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">More: seatledger report --by project · seatledger rates · seatledger limits set --window 5h --tokens N</text>
+  <text x="16" y="573" xml:space="preserve"></text>
+  <text x="16" y="590" class="cmd" textLength="173.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">$ npx seatledger rates</text>
+  <text x="16" y="607" textLength="647.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">seatledger rates — has the same work started costing a different number of tokens?</text>
+  <text x="16" y="624" xml:space="preserve"></text>
+  <text x="16" y="641" textLength="181.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  2 step changes found:</text>
+  <text x="16" y="658" xml:space="preserve"></text>
+  <text x="16" y="675" textLength="734.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  • From 30 Sep (Claude Code 2.1.230, the first day on it), cache reads per request fell 37%,</text>
+  <text x="16" y="692" textLength="734.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    cache writes per request rose 6.8x, the share of cache writes at the 1-hour lifetime went</text>
+  <text x="16" y="709" textLength="671.5" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    from 100% to 0% and the cache-read share of prompt tokens went from 93% to 56% on</text>
+  <text x="16" y="726" textLength="750.5" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    claude-opus-5-5 — the transcript itself shows writes moving from the 1-hour to the 5-minute</text>
+  <text x="16" y="743" textLength="718.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    cache lifetime, so a pause of more than five minutes now pays for a new cache write. It</text>
+  <text x="16" y="760" textLength="450.3" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    starts with Claude Code 2.1.230 (previously 2.1.229).</text>
+  <text x="16" y="777" textLength="639.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">      cache writes per cache read: 0.078 → 0.772  (23 Sep–29 Sep vs 30 Sep–6 Oct)</text>
+  <text x="16" y="794" textLength="742.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">      share of cache writes at the 1-hour lifetime: 100% → 0%  (23 Sep–29 Sep vs 30 Sep–6 Oct)</text>
+  <text x="16" y="811" textLength="655.7" lengthAdjust="spacingAndGlyphs" xml:space="preserve">      cache-read share of prompt tokens: 93% → 56%  (23 Sep–29 Sep vs 30 Sep–6 Oct)</text>
+  <text x="16" y="828" xml:space="preserve"></text>
+  <text x="16" y="845" textLength="750.5" lengthAdjust="spacingAndGlyphs" xml:space="preserve">  • From 22 Sep (Codex 0.159.0, the first day on it), tokens per 1% of the 5-hour window halved</text>
+  <text x="16" y="862" textLength="758.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    across Codex models — consistent with a smaller allowance per token: the same tokens now use</text>
+  <text x="16" y="879" textLength="750.5" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    more of the 5-hour window (usage on other devices on the same account also lowers this). It</text>
+  <text x="16" y="896" textLength="402.9" lengthAdjust="spacingAndGlyphs" xml:space="preserve">    starts with Codex 0.159.0 (previously 0.158.0).</text>
+  <text x="16" y="913" textLength="671.5" lengthAdjust="spacingAndGlyphs" xml:space="preserve">      tokens per 1% of the 5-hour window: 80K → 40K  (11 Sep–21 Sep vs 22 Sep–30 Sep)</text>
+</svg>
