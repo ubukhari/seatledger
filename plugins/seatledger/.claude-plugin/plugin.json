@@ -1,14 +1,14 @@
 {
   "name": "seatledger",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "What this machine's Claude Code and Codex seats and tokens bought: tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and step changes in token rates. Runs npx seatledger locally; no account, no network, no LLM calls of its own.",
   "author": {
     "name": "agentwares",
-    "url": "https://github.com/agentwares"
+    "url": "https://agentwares.vercel.app"
   },
   "homepage": "https://agentwares-agentcheck.vercel.app/seatledger",
-  "documentationUrl": "https://github.com/agentwares/seatledger#readme",
-  "repository": "https://github.com/agentwares/seatledger",
+  "documentationUrl": "https://github.com/ubukhari/seatledger#readme",
+  "repository": "https://github.com/ubukhari/seatledger",
   "privacyPolicyUrl": "https://agentwares-agentcheck.vercel.app/privacy",
   "termsOfServiceUrl": "https://agentwares-agentcheck.vercel.app/terms",
   "supportUrl": "https://agentwares.vercel.app/contact",

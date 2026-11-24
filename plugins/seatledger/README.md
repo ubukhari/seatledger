@@ -23,5 +23,5 @@ What this machine's Claude Code and Codex seats and tokens bought, explained ins
 
 Dollars are API-equivalent: the same tokens at the vendor's API list prices, not your bill.
 
-Source, the full CLI and its documentation: [github.com/agentwares/seatledger](https://github.com/agentwares/seatledger).
+Source, the full CLI and its documentation: [github.com/ubukhari/seatledger](https://github.com/ubukhari/seatledger).
 MIT licensed, by agentwares.

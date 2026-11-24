@@ -2780,7 +2780,7 @@ async function callTool(name, rawArgs, ctx = {}) {
     const body = err instanceof InvalidInput ? { code: "INVALID_INPUT", cause: err.cause_, fix: err.fix, retryable: false } : err instanceof TeamApiError ? err.toJSON() : {
       code: "INTERNAL",
       cause: err instanceof Error ? err.message : String(err),
-      fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/agentwares/seatledger/issues.",
+      fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/ubukhari/seatledger/issues.",
       retryable: false
     };
     return { structured: { ...body }, isError: true };

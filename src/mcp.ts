@@ -295,7 +295,7 @@ export async function callTool(
           : {
               code: "INTERNAL",
               cause: err instanceof Error ? err.message : String(err),
-              fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/agentwares/seatledger/issues.",
+              fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/ubukhari/seatledger/issues.",
               retryable: false,
             };
     return { structured: { ...body }, isError: true };

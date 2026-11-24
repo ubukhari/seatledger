@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2 (2026-11-24)
+
+- The repository moved to github.com/ubukhari/seatledger. The package's `repository`, `bugs` and
+  `homepage`, `server.json`, the plugin's `plugin.json`, the `marketplace add` and Gemini install
+  lines, the CLI's Source line and the MCP error's issues link name it. The npm name `seatledger`
+  and the MCP name `io.github.agentwares/seatledger` are unchanged.
+
 ## 0.3.1 (2026-10-20)
 
 - The once-a-day line after `seatledger`, `report` and `rates` now names the paid plan it is

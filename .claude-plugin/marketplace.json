@@ -3,7 +3,7 @@
   "description": "seatledger, the local ledger of what your coding-agent seats and tokens buy, from inside Claude Code: tokens and API-equivalent dollars by day, project, model and client, and step changes in how requests use tokens. Open source, no account, nothing sent anywhere.",
   "owner": {
     "name": "agentwares",
-    "url": "https://github.com/agentwares"
+    "url": "https://agentwares.vercel.app"
   },
   "plugins": [
     {

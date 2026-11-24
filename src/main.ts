@@ -102,7 +102,7 @@ ledger, and none once this machine is on a team, with --json, or when output is 
 Dollars are API-equivalent: the same tokens at the vendor's API list prices. Not your bill.
 Nothing is sent anywhere unless you run team create, team join, team or push.
 Team ledger: ${DEFAULT_URL}/seatledger?ref=cli
-Source: https://github.com/agentwares/seatledger`;
+Source: https://github.com/ubukhari/seatledger`;
 
 class UsageError extends Error {}
 

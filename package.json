@@ -1,6 +1,6 @@
 {
   "name": "seatledger",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "What your coding-agent seats and tokens buy, from your own machine: Claude Code and Codex tokens and API-equivalent dollars by day, project, model and client, burn toward the limits you set, and a flag when the rate changes. Local and account-free; nothing is sent unless you create or join a team ledger, and push sends daily aggregates only.",
   "license": "MIT",
   "type": "module",
@@ -24,14 +24,14 @@
   "publishConfig": {
     "access": "public"
   },
-  "mcpName": "io.github.agentwares/seatledger",
+  "mcpName": "io.github.ubukhari/seatledger",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/agentwares/seatledger.git"
+    "url": "git+https://github.com/ubukhari/seatledger.git"
   },
-  "homepage": "https://github.com/agentwares/seatledger#readme",
+  "homepage": "https://github.com/ubukhari/seatledger#readme",
   "bugs": {
-    "url": "https://github.com/agentwares/seatledger/issues"
+    "url": "https://github.com/ubukhari/seatledger/issues"
   },
   "keywords": [
     "claude-code",

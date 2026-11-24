@@ -3584,7 +3584,7 @@ async function callTool(name, rawArgs, ctx = {}) {
     const body = err instanceof InvalidInput ? { code: "INVALID_INPUT", cause: err.cause_, fix: err.fix, retryable: false } : err instanceof TeamApiError ? err.toJSON() : {
       code: "INTERNAL",
       cause: err instanceof Error ? err.message : String(err),
-      fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/agentwares/seatledger/issues.",
+      fix: "Run `npx seatledger` in a terminal to see the same error with its context, and report it at https://github.com/ubukhari/seatledger/issues.",
       retryable: false
     };
     return { structured: { ...body }, isError: true };
@@ -3770,7 +3770,7 @@ ledger, and none once this machine is on a team, with --json, or when output is 
 Dollars are API-equivalent: the same tokens at the vendor's API list prices. Not your bill.
 Nothing is sent anywhere unless you run team create, team join, team or push.
 Team ledger: ${DEFAULT_URL}/seatledger?ref=cli
-Source: https://github.com/agentwares/seatledger`;
+Source: https://github.com/ubukhari/seatledger`;
 var UsageError = class extends Error {
 };
 function parseAmount(v, flag) {
