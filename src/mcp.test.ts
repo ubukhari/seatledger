@@ -46,9 +46,11 @@ describe("tool definitions, as an agent reads them", () => {
       }
       for (const r of tool.inputSchema.required ?? [])
         expect(tool.inputSchema.properties).toHaveProperty(r);
+      // all four MCP hints explicit: OpenAI refuses a server that leaves one unset (BUG-8)
       expect(tool.annotations).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,
+        idempotentHint: true,
         // only the hosted team ledger is outside this machine
         openWorldHint: tool.name === "seatledger_team_summary",
       });
@@ -142,6 +144,7 @@ describe("with the official MCP client", () => {
     expect(tools.map((t) => t.name)).toEqual([
       "seatledger_usage_summary",
       "seatledger_rate_changes",
+      "seatledger_plan_compare",
       "seatledger_team_summary",
     ]);
 
@@ -175,5 +178,75 @@ describe("with the official MCP client", () => {
     expect(f.findings.map((x) => [x.date, x.version])).toEqual([["2026-09-30", "2.1.230"]]);
     expect(f.method).toMatch(/at least 20 requests/);
     await client.close();
+  });
+});
+
+describe("seatledger_plan_compare", () => {
+  const call = (args: unknown) =>
+    rpc("tools/call", { name: "seatledger_plan_compare", arguments: args }) as Promise<{
+      result: { isError: boolean; structuredContent: Record<string, unknown> };
+    }>;
+
+  it("is strict about plans: an array of known ids or groups, nothing else", () => {
+    const tool = TOOLS.find((t) => t.name === "seatledger_plan_compare")!;
+    expect(tool.inputSchema.properties.plans).toMatchObject({
+      type: "array",
+      minItems: 1,
+      uniqueItems: true,
+      items: { type: "string" },
+    });
+    const allowed = (tool.inputSchema.properties.plans!.items as { enum: string[] }).enum;
+    expect(allowed).toEqual(expect.arrayContaining(["claude-max-5x", "codex", "copilot"]));
+    expect(tool.annotations.openWorldHint).toBe(false);
+    expect(tool.description).toMatch(/never invented/);
+    expect(tool.description).toMatch(/no local logs/);
+  });
+
+  it("prices this machine's last 30 days on every plan, with sources and dates", async () => {
+    const res = await call({});
+    expect(res.result.isError).toBe(false);
+    const v = res.result.structuredContent as {
+      view: string;
+      period: { days: number };
+      workloads: { client: string }[];
+      quotes: { plan: string; kind: string }[];
+      answer: { byClient: { client: string }[] };
+      sources: { plans: { seen: string }[] };
+    };
+    expect(v.view).toBe("plan_compare");
+    expect(v.period.days).toBe(30);
+    expect(v.workloads.map((w) => w.client)).toEqual(["claude-code", "codex"]);
+    expect(v.quotes.find((q) => q.plan === "claude-max-5x")!.kind).toBe("allowance-unpublished");
+    expect(v.quotes.find((q) => q.plan === "chatgpt-plus")!.kind).toBe("measured");
+    expect(v.answer.byClient).toHaveLength(2);
+    for (const p of v.sources.plans) expect(p.seen).toMatch(/^2026-/);
+  });
+
+  it("narrows to the plans asked for, and takes a range", async () => {
+    const res = await call({ plans: ["copilot", "anthropic-api"], since: "14d" });
+    const v = res.result.structuredContent as {
+      plansCompared: string[];
+      period: { days: number };
+    };
+    expect(v.plansCompared).toEqual([
+      "anthropic-api",
+      "copilot-pro",
+      "copilot-pro-plus",
+      "copilot-max",
+    ]);
+    expect(v.period.days).toBeGreaterThan(13);
+    expect(v.period.days).toBeLessThan(14);
+  });
+
+  it("refuses an unknown plan, an empty list or a string, with code, cause and fix", async () => {
+    for (const args of [{ plans: ["claude-ultra"] }, { plans: [] }, { plans: "claude" }]) {
+      const res = await call(args);
+      expect(res.result.isError).toBe(true);
+      expect(res.result.structuredContent).toMatchObject({
+        code: "INVALID_INPUT",
+        retryable: false,
+      });
+      expect(String(res.result.structuredContent.fix)).toMatch(/claude-max-5x|omit/);
+    }
   });
 });

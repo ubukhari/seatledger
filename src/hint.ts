@@ -1,6 +1,6 @@
 /**
- * The one pointer to the hosted team ledger: a single dim line after the human output of
- * `seatledger`, `seatledger report` and (when it found a step change) `seatledger rates`.
+ * The one pointer to the hosted team ledger and its paid plan: a single dim line after the human
+ * output of `seatledger`, `seatledger report` and (when it found a step change) `seatledger rates`.
  *
  * It is printed at most once a day per machine, only to a terminal, never with `--json`, never in
  * MCP output, never once this machine is on a team, and never at all with `--quiet` or
@@ -11,15 +11,23 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { dayKey } from "./ledger.js";
-import { readTeamConfig } from "./team.js";
+import { DEFAULT_URL, readTeamConfig } from "./team.js";
 
-/** After the summary and `report`. The plans it names are in packages/config (a test holds them). */
-export const TEAM_HINT =
-  "Your whole team in one ledger, free for up to 3 developers; 13 months of history and rate-change emails on Team: `npx seatledger team create`";
+/**
+ * Where the line sends a reader: the plans page, tagged so the visit and any checkout that follows
+ * it are counted as this CLI's (CONV-1). The page records the ref through its page-view beacon and
+ * carries it to the Stripe Checkout as `metadata.ref`; nothing else is sent.
+ */
+export const PRICING_URL = `${DEFAULT_URL}/seatledger/pricing?ref=seatledger-cli`;
+
+/**
+ * After the summary and `report`, which show this machine only. The plans and prices it names are
+ * in packages/config (a test holds them).
+ */
+export const TEAM_HINT = `That was this machine only. Your whole team in one ledger, free for up to 3 developers: \`npx seatledger team create\`; 13 months of history and rate-change emails on Team, $49/month: ${PRICING_URL}`;
 
 /** After `rates`, when it found a step change. */
-export const RATES_HINT =
-  "Get changes like this by email for your whole team: `npx seatledger team create`.";
+export const RATES_HINT = `seatledger Team, $49/month, emails a rate change like this one to your whole team: ${PRICING_URL}`;
 
 export type HintKind = "team" | "rates";
 

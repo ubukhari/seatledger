@@ -52,6 +52,41 @@ export {
 } from "./limits.js";
 export { summaryView, reportView, ratesView, parseSince, API_EQUIVALENT_NOTE } from "./views.js";
 export { TOOLS, callTool, handleMessage, PROTOCOL_VERSIONS } from "./mcp.js";
+export {
+  planCompare,
+  resolvePlans,
+  codexCredits,
+  copilotUsd,
+  MONTH_DAYS,
+  type PlanCompareView,
+  type PlanCompareOptions,
+  type PlanQuote,
+  type QuoteKind,
+  type Workload,
+  type UsageWindow,
+  type CodexReadings,
+  type Option,
+  type Answer,
+  type CouldBeCheaper,
+  type ClientAnswer,
+  type ChangeRef,
+} from "./plan-compare.js";
+export {
+  PLANS,
+  PLAN_IDS,
+  PLAN_GROUPS,
+  PLAN_CHANGES,
+  CODEX_CREDIT,
+  CODEX_CREDIT_RATES,
+  COPILOT_RATES_USD,
+  planById,
+  type Plan,
+  type PlanId,
+  type PlanChange,
+  type Cited,
+  type TokenRates,
+  type Meter,
+} from "./plans.js";
 export { writeSyntheticHistory, type SyntheticOptions } from "./synthetic.js";
 export {
   buildPushPayload,

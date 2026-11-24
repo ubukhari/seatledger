@@ -46,8 +46,9 @@ npx seatledger team                             # the team's plan and your seat
 ```
 
 Every command takes `--json`, `--client claude-code|codex`, `--claude-dir`, `--codex-dir`,
-`--no-cache` and `--quiet`. Without npm: `npx github:agentwares/seatledger` runs the same CLI from this
-repository (it ships its built `dist/`).
+`--no-cache` and `--quiet`. Without npm's registry:
+`npx -y --allow-remote=root https://agentwares.vercel.app/dl/seatledger-0.3.1.tgz` runs the same CLI
+from a tarball on agentwares' own site, packed from this repository with its built `dist/`.
 
 ## What it reads
 
@@ -173,8 +174,9 @@ which creates the team in the browser. An agent can create a free team with no h
 ### The one line about it
 
 After `seatledger`, `seatledger report` and — when it found a step change — `seatledger rates`, a
-terminal shows one dim line pointing at `npx seatledger team create`, at most once a day per
-machine. It never appears with `--json`, in MCP output, when output is not a terminal, or once this
+terminal shows one dim line pointing at `npx seatledger team create` and the Team plan's pricing
+page (its link carries `?ref=seatledger-cli`, so a visit from it is counted as this CLI's), at
+most once a day per machine. It never appears with `--json`, in MCP output, when output is not a terminal, or once this
 machine is on a team. `--quiet` or `SEATLEDGER_QUIET=1` turns it off for good. It is text printed
 on your screen; the only state is the day it was last shown, in `~/.seatledger/hint.json`, and
 nothing is sent.
@@ -209,10 +211,12 @@ where your pushes go; `SEATLEDGER_URL` overrides it.
 
 ## From your agent
 
-**MCP** (`npx -y seatledger mcp`, stdio, read-only): `seatledger_usage_summary` and
-`seatledger_rate_changes` read this machine and make no request; `seatledger_team_summary` reads the
-team ledger this machine created or joined, with its saved key (one HTTPS request, changes
-nothing). Strict
+**MCP** (`npx -y seatledger mcp`, stdio, read-only): `seatledger_usage_summary`,
+`seatledger_rate_changes` and `seatledger_plan_compare` (this machine's last 30 days priced on every
+coding plan, the answer
+[`npx --allow-remote=root https://agentwares.vercel.app/dl/tokens-per-dollar-0.2.0.tgz`](https://github.com/agentwares/tokens-per-dollar)
+prints) read this machine and make no request; `seatledger_team_summary` reads the team ledger
+this machine created or joined, with its saved key (one HTTPS request, changes nothing). Strict
 input schemas, errors with `code`, `cause`, `fix`, `retryable`.
 
 ```sh

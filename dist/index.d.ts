@@ -422,6 +422,346 @@ declare function callTool(name: string, rawArgs: unknown, ctx?: McpContext): Pro
 }>;
 declare function handleMessage(msg: unknown, ctx: McpContext): Promise<unknown>;
 
+/**
+ * Coding plans as their vendors publish them, for `seatledger_plan_compare` and
+ * the tokens-per-dollar CLI. Data only: every row says where it was read and when (`seen`), and
+ * `plan-compare.ts` does the arithmetic.
+ *
+ * What is and is not here:
+ * - Prices are the vendors' own, billed monthly, per seat, in USD. Annual prices are kept where
+ *   the vendor publishes them, for reference; the comparison uses monthly.
+ * - No plan's allowance is published in tokens. Anthropic states Claude plans only as multiples of
+ *   Pro per 5-hour session, plus a weekly limit; OpenAI states Plus as a five-hour window and a
+ *   weekly limit with message-count estimates it calls "not fixed"; GitHub states Copilot's
+ *   allowance in dollars of AI credits. Nothing here turns the first two into a number: the
+ *   comparison says so, and measures what the user's own machine records instead.
+ * - The dollar price of one Codex credit is derived, and marked so (`CODEX_CREDIT`).
+ *
+ * Read again before changing: these pages move. When a row changes, add a `PLAN_CHANGES` entry
+ * with the date the vendor gives, and move `seen`.
+ */
+
+interface Cited {
+    /** What was read there, in a few words. */
+    label: string;
+    url: string;
+    /** YYYY-MM-DD the page was read. */
+    seen: string;
+}
+declare const PLAN_IDS: readonly ["anthropic-api", "claude-pro", "claude-max-5x", "claude-max-20x", "claude-team-standard", "claude-team-premium", "openai-api", "chatgpt-plus", "chatgpt-pro", "codex-credits", "copilot-pro", "copilot-pro-plus", "copilot-max"];
+type PlanId = (typeof PLAN_IDS)[number];
+/** Shorthands `--plans` and the MCP tool accept for a vendor's whole row set. */
+declare const PLAN_GROUPS: Readonly<Record<string, readonly PlanId[]>>;
+/**
+ * How a plan turns tokens into dollars.
+ * - `api`: every token at the vendor's API list price (seatledger's dated price table).
+ * - `allowance`: a flat fee with an allowance the vendor does not publish in tokens; past it,
+ *   usage is billed at `overage` rates.
+ * - `codex-credits`: every token at OpenAI's Codex credit rate card.
+ * - `copilot-credits`: every token at GitHub's per-model rates, less the AI credits the plan
+ *   includes; past them, the same rates.
+ */
+type Meter = "api" | "allowance" | "codex-credits" | "copilot-credits";
+interface Plan {
+    id: PlanId;
+    vendor: "Anthropic" | "OpenAI" | "GitHub";
+    name: string;
+    /** Whose local transcripts hold work this plan can run: Claude Code, Codex or both. */
+    carries: readonly Client[];
+    meter: Meter;
+    /** Per seat per month, billed monthly. `null` for pay-as-you-go. */
+    usdMonthly: number | null;
+    /** Per seat per month, billed annually, where the vendor publishes it. */
+    usdMonthlyAnnual?: number;
+    minSeats?: number;
+    /** Other prices on the same row, as the vendor states them (e.g. Pro's three tiers). */
+    priceNote?: string;
+    /** Usage past the allowance is billed at these rates. */
+    overage?: "api" | "codex-credits" | "copilot-credits";
+    /** Anthropic: the published multiple of Claude Pro's per-session allowance. */
+    timesPro?: number;
+    /** Copilot: AI credits included a month, in USD (1 credit = $0.01), flex allotment included. */
+    includedUsd?: number;
+    /** Of `includedUsd`, the flex allotment GitHub says may change over time. */
+    flexUsd?: number;
+    /** The `plan_type` Codex writes into its rate-limit readings for this plan. */
+    codexPlanType?: string;
+    /** Model-id prefixes this plan bills at `overage` rates from the first token. */
+    overageOnlyModels?: readonly string[];
+    /** The allowance, in the vendor's own terms. */
+    allowance: string;
+    sources: readonly Cited[];
+    /** The latest `seen` of its sources. */
+    seen: string;
+}
+declare const PLANS: readonly Plan[];
+/** Rates per million tokens. */
+interface TokenRates {
+    input: number;
+    cachedInput: number;
+    /** `null`: no separate cache-write charge; written tokens count as input. */
+    cacheWrite: number | null;
+    output: number;
+    /** Above this many prompt tokens, `long` applies to the whole request. */
+    long?: {
+        threshold: number;
+        input: number;
+        cachedInput: number;
+        cacheWrite: number | null;
+        output: number;
+    };
+}
+/**
+ * The dollar price of one Codex credit, derived: OpenAI does not state one for Plus and Pro
+ * ("available purchase amounts, prices … can vary"). Two of its own figures agree on $0.04: "$100
+ * worth of workspace credits (2,500 credits)" in its Business premium-seat post, and the
+ * Enterprise USD rate card, which is 25 credits to the dollar on every row.
+ */
+declare const CODEX_CREDIT: {
+    readonly usd: 0.04;
+    readonly derived: true;
+    readonly how: "OpenAI does not state a price per credit for Plus or Pro; $0.04 is derived from its own figures: $100 of workspace credits is 2,500 credits, and its Enterprise USD rate card is 25 credits to the dollar on every row";
+    readonly sources: readonly Cited[];
+};
+/**
+ * OpenAI's Codex rate card, credits per million tokens at Standard speed (learn.chatgpt.com/docs/
+ * pricing and the help-center rate card, read 8 Oct 2026). Keys are seatledger's model keys
+ * (`priceKey`). GPT-5.6 Sol's rates are promotional, "at least through November 21, 2026".
+ */
+declare const CODEX_CREDIT_RATES: Readonly<Record<string, TokenRates>>;
+/**
+ * GitHub Copilot's per-token rates, USD per million tokens (docs.github.com, "Models and
+ * pricing", read 8 Oct 2026), converted to AI credits at $0.01 each. Keys are seatledger's model
+ * keys. Claude cache writes have one price on Copilot, used for 5-minute and 1-hour writes alike.
+ * `claude-opus-4-8-fast` is the fast-mode row; fast requests on any other model are priced at the
+ * model's standard row, since GitHub lists no other.
+ */
+declare const COPILOT_RATES_USD: Readonly<Record<string, TokenRates>>;
+interface PlanChange {
+    /** The date the vendor gives for it, YYYY-MM-DD (future dates are announced changes). */
+    date: string;
+    vendor: Plan["vendor"];
+    /** The plans it changed. */
+    plans: readonly PlanId[];
+    /**
+     * Plans that did not exist in this form before the date. Undoing the change removes them, which
+     * is how the comparison finds the last change that moved its answer.
+     */
+    introduced?: readonly PlanId[];
+    /**
+     * false: kept for the changelog; nothing the comparison prices depends on it. A change to a limit
+     * no vendor publishes as a number is `true` without `introduced`: it touches the answer, but
+     * cannot be undone in arithmetic.
+     */
+    priced: boolean;
+    /** What changed, in the vendor's terms. Never why. */
+    what: string;
+    /** Who says so: the vendor, or (`reported: true`) the press quoting the vendor. */
+    source: Cited;
+    reported?: true;
+}
+/** Dated vendor changes to the plans above, oldest first. */
+declare const PLAN_CHANGES: readonly PlanChange[];
+declare const planById: (id: PlanId) => Plan;
+
+/**
+ * What this machine's coding-agent month would cost on each plan in `plans.ts`: the arithmetic
+ * behind `seatledger_plan_compare` and the tokens-per-dollar CLI, as data. Local; no request.
+ *
+ * Every figure is one of three kinds, and says which:
+ * - **priced**: published rates times this machine's tokens (the APIs, Codex credits);
+ * - **estimate**: published rates times the same tokens, for a tool that keeps no local logs and
+ *   would not use exactly these tokens (Copilot);
+ * - **measured**: what the vendor's own readings on this machine show (Codex's window percentages
+ *   for the plan it was on).
+ *
+ * A plan whose allowance is not published as a number (Claude Pro, Max and Team; Codex Plus and Pro
+ * when this machine has no reading for them) gets no single price. It gets its fee, what is billed
+ * past the allowance, and the condition under which the fee alone carries the month: that its
+ * allowance holds this machine's busiest 5 hours and busiest week, in API-equivalent dollars.
+ */
+
+/** The month every cost is stated for. */
+declare const MONTH_DAYS = 30;
+interface UsageWindow {
+    /** ISO time the window opens. */
+    start: string;
+    /** API-equivalent USD of the requests in it. */
+    usd: number;
+    requests: number;
+}
+/** Codex's own rate-limit readings over the period, as Codex wrote them. */
+interface CodexReadings {
+    /** The plan Codex named in its latest reading (`plus`, `pro`, …), or null. */
+    planType: string | null;
+    /** Highest 5-hour window percentage, or null when Codex wrote none (Pro has no 5-hour window). */
+    peakFiveHourPercent: number | null;
+    peakWeeklyPercent: number | null;
+    /** Windows (5-hour or weekly) whose reading reached 100%. */
+    windowsAtLimit: number;
+    readings: number;
+}
+interface Workload {
+    client: Client;
+    label: string;
+    requests: number;
+    tokens: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        total: number;
+    };
+    /** API-equivalent USD over the period, at seatledger's dated list prices. */
+    apiUsd: number;
+    /** The same, for a 30-day month (× `period.scale`). */
+    monthApiUsd: number;
+    /** Requests on models with no list price: counted in tokens, left out of every dollar figure. */
+    unpriced: {
+        requests: number;
+        tokens: number;
+        models: string[];
+    };
+    busiestFiveHours: UsageWindow | null;
+    busiestWeek: UsageWindow | null;
+    firstRequest: string | null;
+    codexReadings: CodexReadings | null;
+}
+type QuoteKind = "priced" | "estimate" | "measured" | "measured-at-limit" | "allowance-unpublished";
+interface PlanQuote {
+    plan: PlanId;
+    name: string;
+    vendor: Plan["vendor"];
+    /** The work it is priced on: one client, or both on one Copilot plan. */
+    carries: Client[];
+    /** Fee per seat per month, billed monthly; null for pay-as-you-go. */
+    feeUsd: number | null;
+    /** A 30-day month like this one on this plan; null when no single figure can be honest. */
+    costUsd: number | null;
+    /** The least it could cost: the fee, plus anything billed at overage rates from the first token. */
+    fromUsd: number;
+    kind: QuoteKind;
+    /** How the figure was reached, in one sentence. */
+    basis: string;
+    /** When `costUsd` is null: what would make the fee alone carry the month. */
+    condition: string | null;
+    /** Requests this plan's rates do not cover, left out of its figure. */
+    unpricedRequests: number;
+    /** The numbers behind the figure, per 30-day month, where the plan has them. */
+    figures: {
+        /** Codex credits at the rate card. */
+        codexCredits?: number;
+        /** Copilot: AI credits used, in USD at $0.01 each, and the plan's included allowance. */
+        copilotUsedUsd?: number;
+        includedUsd?: number;
+        /** Billed at API rates from the first token on this plan (Fable on Pro and Team standard). */
+        apiRatesFromStartUsd?: number;
+    };
+}
+interface Option {
+    /** e.g. "Claude Code on Claude Max 5x + Codex on ChatGPT Plus" */
+    label: string;
+    parts: {
+        plan: PlanId;
+        name: string;
+        carries: Client[];
+        costUsd: number;
+        kind: QuoteKind;
+    }[];
+    costUsd: number;
+}
+interface CouldBeCheaper {
+    plan: PlanId;
+    name: string;
+    client: Client;
+    /** The least `client`'s month could cost on this plan. */
+    fromUsd: number;
+    condition: string;
+}
+/** One client's work alone: its cheapest priced plan, the next, and the gap. */
+interface ClientAnswer {
+    client: Client;
+    cheapest: Option;
+    runnerUp: Option | null;
+    /** runnerUp − cheapest */
+    marginUsd: number | null;
+    /** Plans with no single figure whose least cost is below `cheapest`. */
+    couldBeCheaper: CouldBeCheaper[];
+}
+interface ChangeRef {
+    date: string;
+    vendor: PlanChange["vendor"];
+    plans: readonly PlanId[];
+    what: string;
+    source: Cited;
+    reported: boolean;
+}
+interface Answer {
+    /** Everything this machine ran, on the cheapest priced plans (one per client, or one for both). */
+    cheapest: Option;
+    runnerUp: Option | null;
+    /** runnerUp − cheapest */
+    marginUsd: number | null;
+    byClient: ClientAnswer[];
+    /**
+     * The newest dated change that, undone, changes the cheapest option or its cost, or any
+     * client's cheapest plan or runner-up.
+     */
+    lastMoved: (ChangeRef & {
+        without: Option | null;
+    }) | null;
+    /** The newest dated change to any plan in the answer, whether or not it can be undone. */
+    lastTouched: ChangeRef | null;
+}
+interface PlanCompareView {
+    view: "plan_compare";
+    generatedAt: string;
+    period: {
+        from: string;
+        to: string;
+        days: number;
+        /** 30 ÷ days: what metered figures are multiplied by to state a 30-day month. */
+        scale: number;
+    };
+    plansCompared: PlanId[];
+    workloads: Workload[];
+    quotes: PlanQuote[];
+    answer: Answer | null;
+    /** Announced changes after today to the plans compared. */
+    upcoming: ChangeRef[];
+    notes: string[];
+    codexCredit: {
+        usd: number;
+        derived: boolean;
+        how: string;
+        sources: readonly Cited[];
+    };
+    sources: {
+        plans: {
+            plan: PlanId;
+            name: string;
+            seen: string;
+            sources: readonly Cited[];
+        }[];
+    };
+    apiPrices: readonly PriceSource[];
+}
+interface PlanCompareOptions {
+    now: number;
+    /** Epoch ms; default 30 days before `now`. */
+    since?: number;
+    /** Plan ids or group names (`claude`, `codex`, `copilot`); default every plan. */
+    plans?: readonly string[];
+}
+/** Turn ids and group names into plan ids, in table order; throws on an unknown name. */
+declare function resolvePlans(names: readonly string[] | undefined): PlanId[];
+/** Codex credits for one request at OpenAI's rate card, or null for a model not on it. */
+declare function codexCredits(r: UsageRecord): number | null;
+/** USD at GitHub Copilot's per-token rates for one request, or null for a model it does not list. */
+declare function copilotUsd(r: UsageRecord): number | null;
+/** Price this machine's month on every plan asked for. */
+declare function planCompare(loaded: Loaded, opts: PlanCompareOptions): PlanCompareView;
+
 interface SyntheticOptions {
     /** Directory to write into: `<dir>/claude/projects/…` and `<dir>/codex/sessions/…`. */
     dir: string;
@@ -512,4 +852,4 @@ declare function screenshotText(demo: Demo): string;
 /** Terminal-style SVG of plain text: one <text> per line, monospace, dark background. */
 declare function textToSvg(text: string): string;
 
-export { API_EQUIVALENT_NOTE, CLIENTS, CLIENT_LABEL, type Client, type Demo, type FileExtract, GROUP_BY, type GroupBy, type LedgerRow, type Limit, type LimitStatus, type LoadOptions, type Loaded, METHOD, METRICS, METRIC_LABEL, type Metric, type ModelPrice, PRICE_SOURCES, PROTOCOL_VERSIONS, PUSH_SCHEMA_ID, type PriceSource, type PromptMark, type PushFinding, type PushPayload, type PushRow, type QuotaSample, type RateChange, type RateFinding, type RateReport, type Series, type SourceDirs, type SourceSummary, type SyntheticOptions, TOOLS, type Totals, type UsageRecord, type VendorReading, apiEquivalentUsd, assignTurns, buildPushPayload, callTool, clearLimits, dailySeries, dayKey, detectSteps, groupRows, handleMessage, limitStatus, listSourceFiles, load, parseSince, priceFor, priceKey, pricedModels, rateReport, ratesView, readClaudeCodeFile, readCodexFile, readLimits, reportView, runDemo, screenshotText, seatledgerHome, setLimit, sourceDirs, splitPayload, summaryView, textToSvg, toPushFinding, totalTokens, totals, vendorReadings, writeSyntheticHistory };
+export { API_EQUIVALENT_NOTE, type Answer, CLIENTS, CLIENT_LABEL, CODEX_CREDIT, CODEX_CREDIT_RATES, COPILOT_RATES_USD, type ChangeRef, type Cited, type Client, type ClientAnswer, type CodexReadings, type CouldBeCheaper, type Demo, type FileExtract, GROUP_BY, type GroupBy, type LedgerRow, type Limit, type LimitStatus, type LoadOptions, type Loaded, METHOD, METRICS, METRIC_LABEL, MONTH_DAYS, type Meter, type Metric, type ModelPrice, type Option, PLANS, PLAN_CHANGES, PLAN_GROUPS, PLAN_IDS, PRICE_SOURCES, PROTOCOL_VERSIONS, PUSH_SCHEMA_ID, type Plan, type PlanChange, type PlanCompareOptions, type PlanCompareView, type PlanId, type PlanQuote, type PriceSource, type PromptMark, type PushFinding, type PushPayload, type PushRow, type QuotaSample, type QuoteKind, type RateChange, type RateFinding, type RateReport, type Series, type SourceDirs, type SourceSummary, type SyntheticOptions, TOOLS, type TokenRates, type Totals, type UsageRecord, type UsageWindow, type VendorReading, type Workload, apiEquivalentUsd, assignTurns, buildPushPayload, callTool, clearLimits, codexCredits, copilotUsd, dailySeries, dayKey, detectSteps, groupRows, handleMessage, limitStatus, listSourceFiles, load, parseSince, planById, planCompare, priceFor, priceKey, pricedModels, rateReport, ratesView, readClaudeCodeFile, readCodexFile, readLimits, reportView, resolvePlans, runDemo, screenshotText, seatledgerHome, setLimit, sourceDirs, splitPayload, summaryView, textToSvg, toPushFinding, totalTokens, totals, vendorReadings, writeSyntheticHistory };

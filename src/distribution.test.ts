@@ -71,7 +71,10 @@ describe("README", () => {
   it("leads with the one-line use and the screenshot", () => {
     expect(readme).toContain("```sh\nnpx seatledger\n```");
     expect(readme).toContain("docs/screenshot.svg");
-    expect(readme).toContain("npx github:agentwares/seatledger");
+    // without npm's registry: the versioned tarball on our own site (INST-1, scripts/pack-doors.mjs)
+    expect(readme).toContain(
+      `npx -y --allow-remote=root https://agentwares.vercel.app/dl/seatledger-${pkg.version}.tgz`,
+    );
   });
 
   it("names both MCP tools and labels dollars API-equivalent", () => {

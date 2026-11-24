@@ -709,8 +709,8 @@ function apiEquivalentUsd(r) {
   }
   const write1h = r.cacheWrite1h ?? 0;
   const write5m = r.cacheWrite - write1h;
-  const usd2 = (r.input * input + r.output * output + r.cacheRead * cacheRead + write5m * cacheWrite + write1h * cacheWrite1h) / 1e6;
-  return r.geoUs && p.provider === "Anthropic" ? usd2 * 1.1 : usd2;
+  const usd3 = (r.input * input + r.output * output + r.cacheRead * cacheRead + write5m * cacheWrite + write1h * cacheWrite1h) / 1e6;
+  return r.geoUs && p.provider === "Anthropic" ? usd3 * 1.1 : usd3;
 }
 
 // src/ledger.ts
@@ -743,11 +743,11 @@ var Acc = class {
     this.cacheRead += r.cacheRead;
     this.cacheWrite += r.cacheWrite;
     if (r.turn) this.turns.add(r.turn);
-    const usd2 = apiEquivalentUsd(r);
-    if (usd2 === null) {
+    const usd3 = apiEquivalentUsd(r);
+    if (usd3 === null) {
       this.unpriced += 1;
       this.unpricedModels.add(r.model);
-    } else this.usd += usd2;
+    } else this.usd += usd3;
   }
   totals() {
     return {
@@ -1432,6 +1432,912 @@ function parseSince(value, now) {
 // src/mcp.ts
 import { createInterface as createInterface2 } from "readline";
 
+// src/plans.ts
+var PLAN_IDS = [
+  "anthropic-api",
+  "claude-pro",
+  "claude-max-5x",
+  "claude-max-20x",
+  "claude-team-standard",
+  "claude-team-premium",
+  "openai-api",
+  "chatgpt-plus",
+  "chatgpt-pro",
+  "codex-credits",
+  "copilot-pro",
+  "copilot-pro-plus",
+  "copilot-max"
+];
+var PLAN_GROUPS = {
+  claude: [
+    "anthropic-api",
+    "claude-pro",
+    "claude-max-5x",
+    "claude-max-20x",
+    "claude-team-standard",
+    "claude-team-premium"
+  ],
+  codex: ["openai-api", "chatgpt-plus", "chatgpt-pro", "codex-credits"],
+  copilot: ["copilot-pro", "copilot-pro-plus", "copilot-max"]
+};
+var SEEN = "2026-10-08";
+var CLAUDE_PRICING = {
+  label: "Claude plans and pricing",
+  url: "https://claude.com/pricing",
+  seen: SEEN
+};
+var CLAUDE_MAX = {
+  label: "What is the Max plan?",
+  url: "https://support.claude.com/en/articles/11049741-what-is-the-max-plan",
+  seen: SEEN
+};
+var CLAUDE_TEAM = {
+  label: "What is the Team plan?",
+  url: "https://support.claude.com/en/articles/9266767-what-is-the-team-plan",
+  seen: SEEN
+};
+var CLAUDE_TEAM_CODE = {
+  label: "Claude Code on Team and Enterprise seats",
+  url: "https://support.claude.com/en/articles/11845131",
+  seen: SEEN
+};
+var CLAUDE_EXTRA = {
+  label: "Manage usage credits for paid Claude plans",
+  url: "https://support.claude.com/en/articles/12429409-manage-usage-credits-for-paid-claude-plans",
+  seen: SEEN
+};
+var CLAUDE_FABLE = {
+  label: "Claude Fable models on your plan",
+  url: "https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan",
+  seen: SEEN
+};
+var ANTHROPIC_API = {
+  label: "Anthropic API model pricing",
+  url: "https://platform.claude.com/docs/en/about-claude/pricing",
+  seen: "2026-10-07"
+};
+var CODEX_PRICING = {
+  label: "Codex pricing (developers.openai.com/codex/pricing redirects here)",
+  url: "https://learn.chatgpt.com/docs/pricing",
+  seen: SEEN
+};
+var CHATGPT_PRO_TIERS = {
+  label: "About ChatGPT Pro tiers",
+  url: "https://help.openai.com/en/articles/9793128-about-chatgpt-pro-tiers",
+  seen: SEEN
+};
+var CODEX_RATE_CARD = {
+  label: "ChatGPT rate card: credit-based pricing",
+  url: "https://help.openai.com/en/articles/11481834-chatgpt-rate-card-business-enterpriseedu-credit-based-pricing",
+  seen: SEEN
+};
+var OPENAI_API = {
+  label: "OpenAI API pricing",
+  url: "https://developers.openai.com/api/docs/pricing",
+  seen: "2026-10-07"
+};
+var COPILOT_PLANS = {
+  label: "GitHub Copilot plans",
+  url: "https://github.com/features/copilot/plans",
+  seen: SEEN
+};
+var COPILOT_BILLING = {
+  label: "Copilot billing for individuals (1 AI credit = $0.01)",
+  url: "https://docs.github.com/en/copilot/concepts/billing/billing-for-individuals",
+  seen: SEEN
+};
+var COPILOT_RATES = {
+  label: "Copilot models and pricing (per-token rates)",
+  url: "https://docs.github.com/en/copilot/reference/copilot-billing/models-and-pricing",
+  seen: SEEN
+};
+var CLAUDE_WINDOWS = "a 5-hour session allowance and a weekly limit, shared with Claude on the web and desktop; no message, hour or token count is published";
+var PLANS = [
+  {
+    id: "anthropic-api",
+    vendor: "Anthropic",
+    name: "Anthropic API",
+    carries: ["claude-code"],
+    meter: "api",
+    usdMonthly: null,
+    allowance: "none: every token at list price",
+    sources: [ANTHROPIC_API],
+    seen: "2026-10-07"
+  },
+  {
+    id: "claude-pro",
+    vendor: "Anthropic",
+    name: "Claude Pro",
+    carries: ["claude-code"],
+    meter: "allowance",
+    usdMonthly: 20,
+    usdMonthlyAnnual: 17,
+    overage: "api",
+    timesPro: 1,
+    overageOnlyModels: ["claude-fable"],
+    allowance: `${CLAUDE_WINDOWS}; Fable models run on usage credits only`,
+    sources: [CLAUDE_PRICING, CLAUDE_EXTRA, CLAUDE_FABLE],
+    seen: SEEN
+  },
+  {
+    id: "claude-max-5x",
+    vendor: "Anthropic",
+    name: "Claude Max 5x",
+    carries: ["claude-code"],
+    meter: "allowance",
+    usdMonthly: 100,
+    priceNote: "monthly billing only",
+    overage: "api",
+    timesPro: 5,
+    allowance: `5 times Pro's per-session allowance; ${CLAUDE_WINDOWS}; Fable up to 50% of the weekly limit`,
+    sources: [CLAUDE_MAX, CLAUDE_EXTRA, CLAUDE_FABLE],
+    seen: SEEN
+  },
+  {
+    id: "claude-max-20x",
+    vendor: "Anthropic",
+    name: "Claude Max 20x",
+    carries: ["claude-code"],
+    meter: "allowance",
+    usdMonthly: 200,
+    priceNote: "monthly billing only",
+    overage: "api",
+    timesPro: 20,
+    allowance: `20 times Pro's per-session allowance; ${CLAUDE_WINDOWS}; Fable up to 50% of the weekly limit`,
+    sources: [CLAUDE_MAX, CLAUDE_EXTRA, CLAUDE_FABLE],
+    seen: SEEN
+  },
+  {
+    id: "claude-team-standard",
+    vendor: "Anthropic",
+    name: "Claude Team standard",
+    carries: ["claude-code"],
+    meter: "allowance",
+    usdMonthly: 25,
+    usdMonthlyAnnual: 20,
+    minSeats: 2,
+    overage: "api",
+    timesPro: 1.25,
+    overageOnlyModels: ["claude-fable"],
+    allowance: `1.25 times Pro's per-session allowance; ${CLAUDE_WINDOWS}; Fable models run on usage credits only`,
+    sources: [CLAUDE_PRICING, CLAUDE_TEAM, CLAUDE_TEAM_CODE, CLAUDE_EXTRA, CLAUDE_FABLE],
+    seen: SEEN
+  },
+  {
+    id: "claude-team-premium",
+    vendor: "Anthropic",
+    name: "Claude Team premium",
+    carries: ["claude-code"],
+    meter: "allowance",
+    usdMonthly: 125,
+    usdMonthlyAnnual: 100,
+    minSeats: 2,
+    overage: "api",
+    timesPro: 6.25,
+    allowance: `6.25 times Pro's per-session allowance; ${CLAUDE_WINDOWS}; Fable up to 50% of the weekly limit`,
+    sources: [CLAUDE_PRICING, CLAUDE_TEAM, CLAUDE_TEAM_CODE, CLAUDE_EXTRA, CLAUDE_FABLE],
+    seen: SEEN
+  },
+  {
+    id: "openai-api",
+    vendor: "OpenAI",
+    name: "OpenAI API",
+    carries: ["codex"],
+    meter: "api",
+    usdMonthly: null,
+    allowance: "none: every token at list price",
+    sources: [OPENAI_API],
+    seen: "2026-10-07"
+  },
+  {
+    id: "chatgpt-plus",
+    vendor: "OpenAI",
+    name: "ChatGPT Plus",
+    carries: ["codex"],
+    meter: "allowance",
+    usdMonthly: 20,
+    overage: "codex-credits",
+    codexPlanType: "plus",
+    allowance: "a five-hour window and a weekly limit; OpenAI publishes local-message estimates per five hours that it calls not fixed limits; extra credits can be bought past the limit",
+    sources: [CODEX_PRICING],
+    seen: SEEN
+  },
+  {
+    id: "chatgpt-pro",
+    vendor: "OpenAI",
+    name: "ChatGPT Pro",
+    carries: ["codex"],
+    meter: "allowance",
+    usdMonthly: 100,
+    priceNote: "tiers at $100, $200 and $500 a month, billed monthly",
+    overage: "codex-credits",
+    codexPlanType: "pro",
+    allowance: "no five-hour limit; weekly limits, not published in tokens or as a multiple of Plus; extra credits can be bought past the limit",
+    sources: [CODEX_PRICING, CHATGPT_PRO_TIERS],
+    seen: SEEN
+  },
+  {
+    id: "codex-credits",
+    vendor: "OpenAI",
+    name: "Codex credits",
+    carries: ["codex"],
+    meter: "codex-credits",
+    usdMonthly: null,
+    allowance: "none: every token at the credit rate card",
+    sources: [CODEX_RATE_CARD, CODEX_PRICING],
+    seen: SEEN
+  },
+  {
+    id: "copilot-pro",
+    vendor: "GitHub",
+    name: "Copilot Pro",
+    carries: ["claude-code", "codex"],
+    meter: "copilot-credits",
+    usdMonthly: 10,
+    includedUsd: 15,
+    flexUsd: 5,
+    overage: "copilot-credits",
+    allowance: "$15 of AI credits a month ($10 base and a $5 flex allotment that may change)",
+    sources: [COPILOT_PLANS, COPILOT_BILLING, COPILOT_RATES],
+    seen: SEEN
+  },
+  {
+    id: "copilot-pro-plus",
+    vendor: "GitHub",
+    name: "Copilot Pro+",
+    carries: ["claude-code", "codex"],
+    meter: "copilot-credits",
+    usdMonthly: 39,
+    includedUsd: 70,
+    flexUsd: 31,
+    overage: "copilot-credits",
+    allowance: "$70 of AI credits a month ($39 base and a $31 flex allotment that may change)",
+    sources: [COPILOT_PLANS, COPILOT_BILLING, COPILOT_RATES],
+    seen: SEEN
+  },
+  {
+    id: "copilot-max",
+    vendor: "GitHub",
+    name: "Copilot Max",
+    carries: ["claude-code", "codex"],
+    meter: "copilot-credits",
+    usdMonthly: 100,
+    includedUsd: 200,
+    flexUsd: 100,
+    overage: "copilot-credits",
+    allowance: "$200 of AI credits a month ($100 base and a $100 flex allotment that may change)",
+    sources: [COPILOT_PLANS, COPILOT_BILLING, COPILOT_RATES],
+    seen: SEEN
+  }
+];
+var CODEX_CREDIT = {
+  usd: 0.04,
+  derived: true,
+  how: "OpenAI does not state a price per credit for Plus or Pro; $0.04 is derived from its own figures: $100 of workspace credits is 2,500 credits, and its Enterprise USD rate card is 25 credits to the dollar on every row",
+  sources: [
+    {
+      label: "Premium seats in ChatGPT Business ($100 of credits = 2,500 credits)",
+      url: "https://openai.com/index/premium-seats-chatgpt-business/",
+      seen: SEEN
+    },
+    {
+      label: "ChatGPT rate card: Enterprise token-based pricing (USD)",
+      url: "https://help.openai.com/en/articles/20001415-chatgpt-rate-card-enterprise-token-based-pricing",
+      seen: SEEN
+    },
+    {
+      label: "Codex credit purchases (prices can vary)",
+      url: "https://help.openai.com/en/articles/12642688",
+      seen: SEEN
+    }
+  ]
+};
+var credits = (input, cachedInput, output) => ({
+  input,
+  cachedInput,
+  cacheWrite: null,
+  // "Codex credit billing has no separate cache-write charge."
+  output
+});
+var CODEX_CREDIT_RATES = {
+  "gpt-6-astra": credits(250, 25, 1250),
+  "gpt-6.1-sol": credits(50, 2.5, 250),
+  "gpt-6-sol": credits(50, 5, 250),
+  "gpt-6-luna": credits(2.5, 0.25, 12.5),
+  "gpt-5.6-sol": credits(100, 10, 500),
+  "gpt-5.6-terra": credits(50, 5, 300),
+  "gpt-5.6-luna": credits(5, 0.5, 30),
+  "gpt-5.5": credits(125, 12.5, 750),
+  "gpt-5.3-codex": credits(43.75, 4.375, 350),
+  "gpt-5.2": credits(43.75, 4.375, 350)
+};
+var usd = (input, cachedInput, cacheWrite, output, long) => ({
+  input,
+  cachedInput,
+  cacheWrite,
+  output,
+  ...long ? {
+    long: {
+      threshold: long[0],
+      input: long[1],
+      cachedInput: long[2],
+      cacheWrite: long[3],
+      output: long[4]
+    }
+  } : {}
+});
+var COPILOT_RATES_USD = {
+  "claude-haiku-4-5": usd(1, 0.1, 1.25, 5),
+  "claude-haiku-5-5": usd(0.1, 0.01, 0.125, 0.5, [1e5, 0.5, 0.05, 0.625, 2.5]),
+  "claude-sonnet-4": usd(3, 0.3, 3.75, 15),
+  "claude-sonnet-4-6": usd(3, 0.3, 3.75, 15),
+  "claude-sonnet-5": usd(2, 0.2, 2.5, 10),
+  "claude-sonnet-5-5": usd(2, 0.1, 2.5, 10),
+  "claude-opus-4-8": usd(5, 0.5, 6.25, 25),
+  "claude-opus-4-8-fast": usd(10, 1, 12.5, 50),
+  "claude-opus-5": usd(5, 0.5, 6.25, 25),
+  "claude-opus-5-5": usd(4, 0.2, 5, 20),
+  "claude-fable-5": usd(10, 1, 12.5, 50),
+  "claude-fable-5-1": usd(10, 0.25, 12.5, 50),
+  "gpt-5-mini": usd(0.25, 0.025, null, 2),
+  "gpt-5.3-codex": usd(1.75, 0.175, null, 14),
+  "gpt-5.4": usd(2.5, 0.25, null, 15, [272e3, 5, 0.5, null, 22.5]),
+  "gpt-5.4-mini": usd(0.75, 0.075, null, 4.5),
+  "gpt-5.5": usd(5, 0.5, null, 30, [272e3, 10, 1, null, 45]),
+  "gpt-5.6-luna": usd(0.2, 0.02, 0.25, 1.2, [2e5, 0.4, 0.04, 0.5, 1.8]),
+  "gpt-5.6-sol": usd(4, 0.4, 5, 20, [272e3, 8, 0.8, 10, 30]),
+  "gpt-5.6-terra": usd(2, 0.2, 2.5, 12, [272e3, 4, 0.4, 5, 18]),
+  "gpt-6-astra": usd(10, 1, 12.5, 50, [272e3, 20, 2, 25, 75]),
+  "gpt-6-luna": usd(0.1, 0.01, 0.125, 0.5, [272e3, 0.2, 0.02, 0.25, 0.75]),
+  "gpt-6-sol": usd(2, 0.2, 2.5, 10, [272e3, 4, 0.4, 5, 15]),
+  "gpt-6.1-sol": usd(2, 0.1, 2.5, 10, [272e3, 4, 0.2, 5, 15])
+};
+var PLAN_CHANGES = [
+  {
+    date: "2026-01-16",
+    vendor: "Anthropic",
+    plans: ["claude-team-standard"],
+    introduced: ["claude-team-standard"],
+    priced: true,
+    what: "Claude Code access added to Team plan standard seats.",
+    source: {
+      label: "Claude release notes, 16 January 2026",
+      url: "https://support.claude.com/en/articles/12138966-release-notes",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-04-02",
+    vendor: "OpenAI",
+    plans: ["chatgpt-plus", "chatgpt-pro", "codex-credits"],
+    introduced: ["codex-credits"],
+    priced: true,
+    what: "Codex credits priced by token, aligned with API token usage, instead of per message, for Plus, Pro and Business (existing Enterprise plans followed on 23 April).",
+    source: {
+      label: "OpenAI help center, Codex rate card (article 20001106, as indexed; the live URL now redirects to the credit rate card, which no longer carries the date)",
+      url: "https://help.openai.com/en/articles/20001106-codex-rate-card",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-05-13",
+    vendor: "Anthropic",
+    plans: [
+      "claude-pro",
+      "claude-max-5x",
+      "claude-max-20x",
+      "claude-team-standard",
+      "claude-team-premium"
+    ],
+    priced: true,
+    what: "Weekly usage limits in Claude Code 50% higher, as a promotion through 13 September 2026.",
+    source: {
+      label: "Claude Code May\u2013August 2026 weekly limits promotion",
+      url: "https://support.claude.com/en/articles/15910845-claude-code-may-august-2026-weekly-limits-promotion",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-06-01",
+    vendor: "GitHub",
+    plans: ["copilot-pro", "copilot-pro-plus", "copilot-max"],
+    introduced: ["copilot-pro", "copilot-pro-plus", "copilot-max"],
+    priced: true,
+    what: "Every Copilot plan billed in GitHub AI credits, each token priced by model, replacing premium requests (which remain only on legacy annual plans).",
+    source: {
+      label: "GitHub changelog, 1 June 2026: updates to Copilot billing and plans",
+      url: "https://github.blog/changelog/2026-06-01-updates-to-github-copilot-billing-and-plans/",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-08-25",
+    vendor: "OpenAI",
+    plans: ["chatgpt-plus"],
+    priced: true,
+    what: "Five-hour limit back on Codex for Plus after a period without one, announced on X by OpenAI's engineering lead for Codex; Pro stays without one. OpenAI's pricing page lists Plus with a five-hour window and Pro without.",
+    source: {
+      label: "iThinkDifferent, 25 August 2026, on the announcement",
+      url: "https://www.ithinkdiff.com/openai-codex-five-hour-limit/",
+      seen: SEEN
+    },
+    reported: true
+  },
+  {
+    date: "2026-09-14",
+    vendor: "Anthropic",
+    plans: [
+      "claude-pro",
+      "claude-max-5x",
+      "claude-max-20x",
+      "claude-team-standard",
+      "claude-team-premium"
+    ],
+    priced: true,
+    what: "The promotion ended: standard weekly limits in Claude Code are 25% higher than before it, which is one sixth (about 17%) less than during it.",
+    source: {
+      label: "Claude Code May\u2013August 2026 weekly limits promotion",
+      url: "https://support.claude.com/en/articles/15910845-claude-code-may-august-2026-weekly-limits-promotion",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-10-07",
+    vendor: "Anthropic",
+    plans: ["claude-max-5x", "claude-max-20x", "claude-team-standard", "claude-team-premium"],
+    priced: false,
+    what: "Max and Team plans include monthly API credits for the Claude Platform ($100 on Max 5x, $200 on Max 20x, $20 and $100 per Team seat); they do not cover interactive Claude Code.",
+    source: {
+      label: "Monthly API credits for Max and Team plans",
+      url: "https://support.claude.com/en/articles/17154008-monthly-api-credits-for-max-and-team-plans",
+      seen: SEEN
+    }
+  },
+  {
+    date: "2026-10-14",
+    vendor: "OpenAI",
+    plans: ["chatgpt-plus", "chatgpt-pro", "codex-credits"],
+    priced: false,
+    what: "GPT-5.5 retires from Codex on all plans.",
+    source: CODEX_PRICING
+  }
+];
+var planById = (id) => PLANS.find((p) => p.id === id);
+
+// src/plan-compare.ts
+var DAY = 864e5;
+var FIVE_HOURS2 = 5 * 36e5;
+var WEEK2 = 7 * DAY;
+var MONTH_DAYS = 30;
+function resolvePlans(names) {
+  if (!names || names.length === 0) return [...PLAN_IDS];
+  const want = /* @__PURE__ */ new Set();
+  for (const raw of names) {
+    const n = raw.trim().toLowerCase();
+    if (!n) continue;
+    const group = PLAN_GROUPS[n];
+    if (group) group.forEach((id) => want.add(id));
+    else if (PLAN_IDS.includes(n)) want.add(n);
+    else
+      throw new Error(
+        `unknown plan "${raw}"; use ${Object.keys(PLAN_GROUPS).join(", ")} or one of: ${PLAN_IDS.join(", ")}`
+      );
+  }
+  if (want.size === 0) throw new Error("no plans named");
+  return PLAN_IDS.filter((id) => want.has(id));
+}
+function priceAt(r, rates) {
+  const prompt = r.input + r.cacheRead + r.cacheWrite;
+  const t = rates.long && prompt > rates.long.threshold ? rates.long : rates;
+  const write = t.cacheWrite ?? t.input;
+  return (r.input * t.input + r.cacheRead * t.cachedInput + r.cacheWrite * write + r.output * t.output) / 1e6;
+}
+function codexCredits(r) {
+  const rates = CODEX_CREDIT_RATES[priceKey(r.model)];
+  return rates ? priceAt(r, rates) : null;
+}
+function copilotUsd(r) {
+  const key = priceKey(r.model);
+  const rates = (r.fast ? COPILOT_RATES_USD[`${key}-fast`] : void 0) ?? COPILOT_RATES_USD[key];
+  return rates ? priceAt(r, rates) : null;
+}
+function busiestFiveHours(rs) {
+  let best = null;
+  let start = -Infinity;
+  let usd3 = 0;
+  let n = 0;
+  const close = () => {
+    if (n > 0 && (!best || usd3 > best.usd))
+      best = { start: new Date(start).toISOString(), usd: usd3, requests: n };
+  };
+  for (const r of rs) {
+    if (r.ts >= start + FIVE_HOURS2) {
+      close();
+      start = r.ts;
+      usd3 = 0;
+      n = 0;
+    }
+    usd3 += apiEquivalentUsd(r) ?? 0;
+    n += 1;
+  }
+  close();
+  return best;
+}
+function busiestWeek(rs) {
+  let best = null;
+  let j = 0;
+  let usd3 = 0;
+  for (let i = 0; i < rs.length; i++) {
+    while (j < rs.length && rs[j].ts < rs[i].ts + WEEK2) usd3 += apiEquivalentUsd(rs[j++]) ?? 0;
+    if (!best || usd3 > best.usd)
+      best = { start: new Date(rs[i].ts).toISOString(), usd: usd3, requests: j - i };
+    usd3 -= apiEquivalentUsd(rs[i]) ?? 0;
+  }
+  return best;
+}
+function codexReadings(loaded, from, now) {
+  const qs = loaded.quota.filter((q) => q.client === "codex" && q.ts >= from && q.ts <= now);
+  if (qs.length === 0) return null;
+  let five = null;
+  let week = null;
+  const atLimit = /* @__PURE__ */ new Set();
+  for (const q of qs) {
+    const isFive = q.slot === "primary" && (q.windowMinutes === null || q.windowMinutes <= 300);
+    if (isFive) five = Math.max(five ?? 0, q.usedPercent);
+    else week = Math.max(week ?? 0, q.usedPercent);
+    if (q.usedPercent >= 100) atLimit.add(`${q.limitId}/${q.slot}@${q.resetsAt ?? q.ts}`);
+  }
+  const latest = qs.reduce((a, b) => b.ts >= a.ts ? b : a);
+  return {
+    planType: latest.planType,
+    peakFiveHourPercent: five,
+    peakWeeklyPercent: week,
+    windowsAtLimit: atLimit.size,
+    readings: qs.length
+  };
+}
+function workload(client, rs, scale, readings) {
+  const tokens2 = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
+  const unpriced = { requests: 0, tokens: 0, models: /* @__PURE__ */ new Set() };
+  let usd3 = 0;
+  for (const r of rs) {
+    tokens2.input += r.input;
+    tokens2.output += r.output;
+    tokens2.cacheRead += r.cacheRead;
+    tokens2.cacheWrite += r.cacheWrite;
+    tokens2.total += totalTokens(r);
+    const u = apiEquivalentUsd(r);
+    if (u === null) {
+      unpriced.requests += 1;
+      unpriced.tokens += totalTokens(r);
+      unpriced.models.add(r.model);
+    } else usd3 += u;
+  }
+  return {
+    client,
+    label: CLIENT_LABEL[client],
+    requests: rs.length,
+    tokens: tokens2,
+    apiUsd: usd3,
+    monthApiUsd: usd3 * scale,
+    unpriced: { ...unpriced, models: [...unpriced.models].sort() },
+    busiestFiveHours: busiestFiveHours(rs),
+    busiestWeek: busiestWeek(rs),
+    firstRequest: rs.length ? new Date(rs[0].ts).toISOString() : null,
+    codexReadings: client === "codex" ? readings : null
+  };
+}
+var money = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function windowCondition(w, what) {
+  const five = w.busiestFiveHours ? money(w.busiestFiveHours.usd) : "$0.00";
+  const week = w.busiestWeek ? money(w.busiestWeek.usd) : "$0.00";
+  return `${what} holds this machine's busiest 5 hours (${five} at API list prices) and busiest week (${week})`;
+}
+function quote(plan, carries, byClient, works, scale) {
+  const rs = carries.flatMap((c) => byClient.get(c) ?? []);
+  const base = {
+    plan: plan.id,
+    name: plan.name,
+    vendor: plan.vendor,
+    carries,
+    feeUsd: plan.usdMonthly
+  };
+  const w = works.get(carries[0]);
+  if (plan.meter === "api") {
+    return {
+      ...base,
+      costUsd: w.monthApiUsd,
+      fromUsd: w.monthApiUsd,
+      kind: "priced",
+      basis: `every token at ${plan.vendor}'s API list prices`,
+      condition: null,
+      unpricedRequests: w.unpriced.requests,
+      figures: {}
+    };
+  }
+  if (plan.meter === "codex-credits") {
+    let credits2 = 0;
+    let missing = 0;
+    for (const r of rs) {
+      const c = codexCredits(r);
+      if (c === null) missing += 1;
+      else credits2 += c;
+    }
+    const cost = credits2 * scale * CODEX_CREDIT.usd;
+    return {
+      ...base,
+      costUsd: cost,
+      fromUsd: cost,
+      kind: "priced",
+      basis: `${Math.round(credits2 * scale).toLocaleString("en-US")} credits at OpenAI's Codex rate card (no separate cache-write charge), at $${CODEX_CREDIT.usd} a credit, derived from OpenAI's own figures`,
+      condition: null,
+      unpricedRequests: missing,
+      figures: { codexCredits: credits2 * scale }
+    };
+  }
+  if (plan.meter === "copilot-credits") {
+    let usd3 = 0;
+    let missing = 0;
+    for (const r of rs) {
+      const c = copilotUsd(r);
+      if (c === null) missing += 1;
+      else usd3 += c;
+    }
+    const used = usd3 * scale;
+    const included = plan.includedUsd ?? 0;
+    const cost = (plan.usdMonthly ?? 0) + Math.max(0, used - included);
+    return {
+      ...base,
+      costUsd: cost,
+      fromUsd: cost,
+      kind: "estimate",
+      basis: `the same tokens at GitHub's per-token rates: ${Math.round(used * 100).toLocaleString("en-US")} AI credits against ${Math.round(included * 100).toLocaleString("en-US")} included, the rest at $0.01 each; Copilot keeps no local logs, and its agent would not use exactly these tokens`,
+      condition: null,
+      unpricedRequests: missing,
+      figures: { copilotUsedUsd: used, includedUsd: included }
+    };
+  }
+  const fee = plan.usdMonthly ?? 0;
+  let extra = 0;
+  if (plan.overageOnlyModels?.length) {
+    for (const r of rs)
+      if (plan.overageOnlyModels.some((m) => priceKey(r.model).startsWith(m)))
+        extra += (apiEquivalentUsd(r) ?? 0) * scale;
+  }
+  const from = fee + extra;
+  const extraNote = extra > 0 ? ` ${money(extra)} of this month is on Fable models, which this plan bills at API rates from the first token.` : "";
+  if (plan.vendor === "Anthropic") {
+    const multiple = plan.timesPro === 1 ? "Anthropic publishes no number for it" : `Anthropic publishes it only as ${plan.timesPro} times Pro's per-session allowance`;
+    return {
+      ...base,
+      costUsd: null,
+      fromUsd: from,
+      kind: "allowance-unpublished",
+      basis: `${money(fee)} a seat${plan.minSeats ? ` (at least ${plan.minSeats} seats)` : ""}; past its allowance, extra usage at API rates; ${multiple}.${extraNote}`,
+      condition: windowCondition(w, `the fee alone carries the month if its allowance`),
+      unpricedRequests: w.unpriced.requests,
+      figures: extra > 0 ? { apiRatesFromStartUsd: extra } : {}
+    };
+  }
+  const rd = w.codexReadings;
+  const mine = rd && rd.planType === plan.codexPlanType ? rd : null;
+  const tiers = plan.priceNote ? ` (${plan.priceNote})` : "";
+  if (mine && mine.windowsAtLimit === 0) {
+    const five = mine.peakFiveHourPercent === null ? "" : `busiest 5-hour window ${Math.round(mine.peakFiveHourPercent)}%, `;
+    const week = mine.peakWeeklyPercent === null ? "no weekly reading" : `busiest week ${Math.round(mine.peakWeeklyPercent)}%`;
+    const single = plan.id === "chatgpt-plus";
+    return {
+      ...base,
+      costUsd: single ? fee : null,
+      fromUsd: fee,
+      kind: "measured",
+      basis: `Codex's own readings on this machine, on ${plan.name}: ${five}${week} of the limit, never 100%${single ? "" : `; ${plan.name} has tiers${tiers}, and the readings do not say which`}.`,
+      condition: single ? null : `the fee alone carried the month on your ${plan.name} tier`,
+      unpricedRequests: 0,
+      figures: {}
+    };
+  }
+  if (mine) {
+    return {
+      ...base,
+      costUsd: null,
+      fromUsd: fee,
+      kind: "measured-at-limit",
+      basis: `Codex's own readings on this machine, on ${plan.name}: ${mine.windowsAtLimit} window${mine.windowsAtLimit === 1 ? "" : "s"} reached 100% of the limit; past it, credits at the rate card${tiers}.`,
+      condition: `the fee alone did not carry the month: work past the limit needs credits, which the readings do not size`,
+      unpricedRequests: 0,
+      figures: {}
+    };
+  }
+  return {
+    ...base,
+    costUsd: null,
+    fromUsd: fee,
+    kind: "allowance-unpublished",
+    basis: `${money(fee)} a month${tiers}; ${plan.allowance}.`,
+    condition: windowCondition(w, `the fee alone carries the month if its limit`),
+    unpricedRequests: 0,
+    figures: {}
+  };
+}
+var known = (q) => q.costUsd !== null;
+function bestOptions(quotes, clients) {
+  const single = (c) => quotes.filter((q) => known(q) && q.carries.length === 1 && q.carries[0] === c);
+  const part = (q) => ({
+    plan: q.plan,
+    name: q.name,
+    carries: q.carries,
+    costUsd: q.costUsd,
+    kind: q.kind
+  });
+  const out = [];
+  if (clients.length === 1) {
+    for (const q of single(clients[0]))
+      out.push({ label: q.name, parts: [part(q)], costUsd: q.costUsd });
+  } else {
+    const [a, b] = clients;
+    for (const qa of single(a))
+      for (const qb of single(b)) {
+        if (qa.vendor === "GitHub" && qb.vendor === "GitHub") continue;
+        out.push({
+          label: `${CLIENT_LABEL[a]} on ${qa.name} + ${CLIENT_LABEL[b]} on ${qb.name}`,
+          parts: [part(qa), part(qb)],
+          costUsd: qa.costUsd + qb.costUsd
+        });
+      }
+    for (const q of quotes.filter((x) => known(x) && x.carries.length === 2))
+      out.push({ label: `both on ${q.name}`, parts: [part(q)], costUsd: q.costUsd });
+  }
+  return out.sort((x, y) => x.costUsd - y.costUsd || x.label.localeCompare(y.label));
+}
+var cents = (n) => Math.round(n * 100);
+function changeRef(c) {
+  return {
+    date: c.date,
+    vendor: c.vendor,
+    plans: c.plans,
+    what: c.what,
+    source: c.source,
+    reported: c.reported === true
+  };
+}
+function clientAnswer(quotes, client) {
+  const options = bestOptions(quotes, [client]);
+  const cheapest = options[0];
+  if (!cheapest) return null;
+  const vendorOf = (o) => planById(o.parts[0].plan).vendor;
+  const runnerUp = options.slice(1).find((o) => vendorOf(o) !== vendorOf(cheapest)) ?? options[1] ?? null;
+  const couldBeCheaper = quotes.filter(
+    (q) => q.costUsd === null && q.condition !== null && q.kind !== "measured-at-limit" && q.carries.length === 1 && q.carries[0] === client && cents(q.fromUsd) < cents(cheapest.costUsd)
+  ).map((q) => ({
+    plan: q.plan,
+    name: q.name,
+    client,
+    fromUsd: q.fromUsd,
+    condition: q.condition
+  })).sort((a, b) => a.fromUsd - b.fromUsd || a.name.localeCompare(b.name));
+  return {
+    client,
+    cheapest,
+    runnerUp,
+    marginUsd: runnerUp ? runnerUp.costUsd - cheapest.costUsd : null,
+    couldBeCheaper
+  };
+}
+function fingerprint(quotes, clients) {
+  const all = bestOptions(quotes, clients)[0];
+  const per = clients.map((c) => {
+    const o = bestOptions(quotes, [c]);
+    return `${o[0]?.label ?? "-"}/${o[1]?.label ?? "-"}`;
+  });
+  return [all?.label ?? "-", cents(all?.costUsd ?? -1), ...per].join("|");
+}
+function answerFrom(quotes, clients, today) {
+  const options = bestOptions(quotes, clients);
+  const cheapest = options[0];
+  if (!cheapest) return null;
+  const runnerUp = options[1] ?? null;
+  const byClient = clients.map((c) => clientAnswer(quotes, c)).filter((a) => a !== null);
+  const inAnswer = /* @__PURE__ */ new Set([
+    ...cheapest.parts.map((p) => p.plan),
+    ...byClient.flatMap((a) => [
+      ...a.cheapest.parts.map((p) => p.plan),
+      ...a.runnerUp?.parts.map((p) => p.plan) ?? [],
+      ...a.couldBeCheaper.map((c) => c.plan)
+    ])
+  ]);
+  const past = PLAN_CHANGES.filter((c) => c.date <= today && c.priced).reverse();
+  const current = fingerprint(quotes, clients);
+  let lastMoved = null;
+  for (const c of past) {
+    if (!c.introduced?.length) continue;
+    const before = quotes.filter((q) => !c.introduced.includes(q.plan));
+    if (fingerprint(before, clients) !== current) {
+      lastMoved = { ...changeRef(c), without: bestOptions(before, clients)[0] ?? null };
+      break;
+    }
+  }
+  const touched = past.find((c) => c.plans.some((p) => inAnswer.has(p)));
+  return {
+    cheapest,
+    runnerUp,
+    marginUsd: runnerUp ? runnerUp.costUsd - cheapest.costUsd : null,
+    byClient,
+    lastMoved,
+    lastTouched: touched ? changeRef(touched) : null
+  };
+}
+var isoDay = (ts) => new Date(ts).toISOString().slice(0, 10);
+function planCompare(loaded, opts) {
+  const now = opts.now;
+  const from = opts.since ?? now - MONTH_DAYS * DAY;
+  const days = Math.max((now - from) / DAY, 1 / 24);
+  const scale = MONTH_DAYS / days;
+  const ids = resolvePlans(opts.plans);
+  const plans = PLANS.filter((p) => ids.includes(p.id));
+  const inRange = loaded.requests.filter((r) => r.ts >= from && r.ts <= now);
+  const byClient = new Map(
+    CLIENTS.map((c) => [c, inRange.filter((r) => r.client === c)])
+  );
+  const readings = codexReadings(loaded, from, now);
+  const clients = CLIENTS.filter((c) => (byClient.get(c)?.length ?? 0) > 0);
+  const works = new Map(
+    clients.map((c) => [c, workload(c, byClient.get(c), scale, readings)])
+  );
+  const quotes = [];
+  for (const plan of plans) {
+    const mine = plan.carries.filter((c) => works.has(c));
+    for (const c of mine) quotes.push(quote(plan, [c], byClient, works, scale));
+    if (mine.length === 2) quotes.push(quote(plan, mine, byClient, works, scale));
+  }
+  const today = isoDay(now);
+  const answer = answerFrom(quotes, clients, today);
+  const upcoming = PLAN_CHANGES.filter(
+    (c) => c.date > today && c.plans.some((p) => quotes.some((q) => q.plan === p))
+  ).map(changeRef);
+  const notes = [];
+  if (Math.abs(scale - 1) > 0.02)
+    notes.push(
+      `Metered figures are scaled from ${days.toFixed(1)} days to a ${MONTH_DAYS}-day month; flat fees are not.`
+    );
+  for (const w of works.values()) {
+    const first = w.firstRequest ? Date.parse(w.firstRequest) : from;
+    if (first - from > 2 * DAY)
+      notes.push(
+        `${w.label} history on this machine starts ${isoDay(first)}, after the period starts; days before it count as no use.`
+      );
+    if (w.unpriced.requests > 0)
+      notes.push(
+        `${w.unpriced.requests.toLocaleString("en-US")} ${w.label} requests on models with no list price (${w.unpriced.models.join(", ")}) are left out of every dollar figure.`
+      );
+  }
+  if (readings)
+    notes.push(
+      "Codex's readings are account-wide: Codex use on other machines and in the cloud counts in them."
+    );
+  return {
+    view: "plan_compare",
+    generatedAt: new Date(now).toISOString(),
+    period: { from: new Date(from).toISOString(), to: new Date(now).toISOString(), days, scale },
+    plansCompared: ids,
+    workloads: [...works.values()],
+    quotes,
+    answer,
+    upcoming,
+    notes,
+    codexCredit: {
+      usd: CODEX_CREDIT.usd,
+      derived: CODEX_CREDIT.derived,
+      how: CODEX_CREDIT.how,
+      sources: CODEX_CREDIT.sources
+    },
+    sources: {
+      plans: plans.map((p) => ({ plan: p.id, name: p.name, seen: p.seen, sources: p.sources }))
+    },
+    apiPrices: PRICE_SOURCES
+  };
+}
+
 // src/team.ts
 import { chmodSync, existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "fs";
 import os from "os";
@@ -1629,9 +2535,9 @@ function add(g, r) {
   g.row.output_tokens += r.output;
   g.row.cache_read_tokens += r.cacheRead;
   g.row.cache_write_tokens += r.cacheWrite;
-  const usd2 = apiEquivalentUsd(r);
-  if (usd2 === null) g.unpriced = true;
-  else g.row.api_equivalent_usd = (g.row.api_equivalent_usd ?? 0) + usd2;
+  const usd3 = apiEquivalentUsd(r);
+  if (usd3 === null) g.unpriced = true;
+  else g.row.api_equivalent_usd = (g.row.api_equivalent_usd ?? 0) + usd3;
 }
 function splitPayload(p) {
   if (p.days.length === 0) return [];
@@ -1733,6 +2639,30 @@ var TOOLS = [
     annotations: annotations("Token rate changes")
   },
   {
+    name: "seatledger_plan_compare",
+    title: "This machine's month on every coding plan",
+    description: "What this machine's last 30 days of Claude Code and Codex work would cost on each coding plan, read from the local transcripts: the Anthropic and OpenAI APIs at list prices; Claude Pro, Max 5x, Max 20x, Team standard and Team premium; ChatGPT Plus and Pro; Codex credits at OpenAI's rate card; and Copilot Pro, Pro+ and Max at GitHub's per-token AI-credit rates. Returns each client's tokens, API-equivalent dollars and busiest 5 hours and week; a quote per plan saying how it was reached (priced from published rates, measured from Codex's own window readings, or an estimate); per client, the cheapest priced plan, the runner-up and the margin; plans that could be cheaper if an allowance the vendor does not publish holds the busiest 5 hours and week; and the newest dated vendor change that moved the answer. Allowances Anthropic and OpenAI do not publish as numbers are never invented: those plans get their fee and that condition. Copilot figures are estimates, since Copilot keeps no local logs and its agent would not use exactly these tokens. The dollar price of a Codex credit is derived from OpenAI's own figures and marked so. Every plan carries its source URLs and the date they were read. Costs are stated for a 30-day month.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: {
+          type: "string",
+          pattern: SINCE_PATTERN,
+          description: "Start of the range: a local date (`2026-09-01`) or a span back from today (`30d`, `12w`). Metered figures are scaled to a 30-day month either way. Omitted: the last 30 days."
+        },
+        plans: {
+          type: "array",
+          items: { type: "string", enum: [...PLAN_IDS, ...Object.keys(PLAN_GROUPS)] },
+          minItems: 1,
+          uniqueItems: true,
+          description: "Only these plans: plan ids such as `claude-max-5x`, `chatgpt-plus` or `copilot-max`, or a vendor group (`claude`, `codex`, `copilot`). Omitted: every plan."
+        }
+      },
+      additionalProperties: false
+    },
+    annotations: annotations("This machine's month on every coding plan")
+  },
+  {
     name: "seatledger_team_summary",
     title: "Team coding-agent ledger",
     description: "The hosted seatledger team ledger this machine created or joined (`seatledger team create` or `seatledger team join`): what the team's coding-agent seats and tokens bought, from every developer's pushed daily aggregates. Returns team totals; tables by day, month, developer, model and client; and the rate-change findings feed, each with its date, the developer, the client version and whether that was its first day, and what the step is consistent with. A developer's key sees every team total and only their own row in `by_developer`; the owner key sees every developer. Dollars are API-equivalent (the same tokens at API list prices), not what anyone was billed. History is as long as the team's plan keeps (Free 30 days, Team and Business 13 months). Needs the key `seatledger team create` or `team join` saved in ~/.seatledger/team.json, or SEATLEDGER_KEY; without one it returns NO_TEAM_KEY. This tool makes one HTTPS request to that ledger and changes nothing.",
@@ -1771,6 +2701,21 @@ function checkArgs(tool, args) {
         `unknown argument \`${k}\``,
         `Use only: ${Object.keys(props).join(", ")}.`
       );
+    if (spec.type === "array") {
+      const items = spec.items ?? {};
+      if (!Array.isArray(v) || v.length === 0 || v.some((x) => typeof x !== "string"))
+        throw new InvalidInput(
+          `\`${k}\` must be a non-empty array of strings`,
+          `Pass \`${k}\` as e.g. ["claude-max-5x"], or omit it.`
+        );
+      const bad = v.find((x) => items.enum && !items.enum.includes(x));
+      if (bad !== void 0)
+        throw new InvalidInput(
+          `\`${k}\` has "${bad}"`,
+          `Use any of: ${(items.enum ?? []).join(", ")}.`
+        );
+      continue;
+    }
     if (typeof v !== "string")
       throw new InvalidInput(`\`${k}\` must be a string`, `Pass \`${k}\` as a string.`);
     const allowed = spec.enum;
@@ -1781,7 +2726,7 @@ function checkArgs(tool, args) {
         `\`${k}\` is "${v}"`,
         "Use a local date like 2026-09-01 or a span like 30d or 12w."
       );
-    if (spec.minLength && v.length < Number(spec.minLength))
+    if (spec.minLength && typeof v === "string" && v.length < Number(spec.minLength))
       throw new InvalidInput(`\`${k}\` is empty`, `Omit \`${k}\` or give a value.`);
   }
   return args;
@@ -1802,6 +2747,15 @@ async function callTool(name, rawArgs, ctx = {}) {
     }
     const client = args.client;
     const since = typeof args.since === "string" ? parseSince(args.since, now) : void 0;
+    if (name === "seatledger_plan_compare") {
+      const from2 = since ?? now - MONTH_DAYS * 864e5;
+      const loaded2 = await load({ ...ctx.loadOptions, home, since: from2 });
+      const plans = Array.isArray(args.plans) ? args.plans : void 0;
+      return {
+        structured: { ...planCompare(loaded2, { now, since: from2, ...plans ? { plans } : {} }) },
+        isError: false
+      };
+    }
     if (name === "seatledger_usage_summary") {
       if (since === void 0 && args.group_by === void 0) {
         const loaded3 = await load({ ...ctx.loadOptions, home });
@@ -1832,7 +2786,7 @@ async function callTool(name, rawArgs, ctx = {}) {
     return { structured: { ...body }, isError: true };
   }
 }
-var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
+var INSTRUCTIONS = "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits, step changes in token rates, and what the month would cost on each coding plan. Read-only. seatledger_usage_summary, seatledger_rate_changes and seatledger_plan_compare make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
 async function handleMessage(msg, ctx) {
   if (Array.isArray(msg)) {
     const out = (await Promise.all(msg.map((m) => handleMessage(m, ctx)))).filter(
@@ -1910,7 +2864,7 @@ function rng(seed) {
   };
 }
 var PROJECTS = ["webapp", "api-server", "infra"];
-var DAY = 864e5;
+var DAY2 = 864e5;
 function writeSyntheticHistory(opts) {
   const start = Date.parse(`${opts.start ?? "2026-08-25"}T00:00:00Z`);
   const days = opts.days ?? 44;
@@ -1924,10 +2878,10 @@ function writeSyntheticHistory(opts) {
   let codexRequests = 0;
   let msg = 0;
   for (let d = 0; d < days; d++) {
-    const dayStart = start + d * DAY;
+    const dayStart = start + d * DAY2;
     const weekend = new Date(dayStart).getUTCDay() % 6 === 0;
     const after = step !== void 0 && dayStart >= step;
-    const version2 = after ? "2.1.230" : dayStart >= start + 12 * DAY ? "2.1.229" : "2.1.226";
+    const version2 = after ? "2.1.230" : dayStart >= start + 12 * DAY2 ? "2.1.229" : "2.1.226";
     const sessions = weekend ? 1 : between(2, 3);
     let clock2 = dayStart + 9 * 36e5;
     for (let s = 0; s < sessions; s++) {
@@ -2145,7 +3099,7 @@ function writeSyntheticHistory(opts) {
   return {
     claudeDir,
     codexDir,
-    now: start + (days - 1) * DAY + 16 * 36e5,
+    now: start + (days - 1) * DAY2 + 16 * 36e5,
     claudeRequests,
     codexRequests
   };
@@ -2167,7 +3121,7 @@ function tokens(n) {
 function int(n) {
   return Math.round(n).toLocaleString("en-US");
 }
-function usd(n) {
+function usd2(n) {
   if (n >= 1e3) return `$${Math.round(n).toLocaleString("en-US")}`;
   return `$${n.toFixed(2)}`;
 }
@@ -2223,7 +3177,7 @@ function cells(key, t) {
     tokens(t.cacheWrite),
     tokens(t.cacheRead),
     tokens(t.tokens),
-    t.requests === 0 ? "\u2014" : usd(t.apiEquivalentUsd) + (t.unpricedRequests > 0 ? "*" : "")
+    t.requests === 0 ? "\u2014" : usd2(t.apiEquivalentUsd) + (t.unpricedRequests > 0 ? "*" : "")
   ];
 }
 function ledgerTable(rows, total, label = (k) => k) {
@@ -2278,7 +3232,7 @@ function renderLimits(limits, readings, now) {
   }
   return out;
 }
-var amountOf = (s, n) => s.unit === "tokens" ? `${tokens(n)} tokens` : usd(n);
+var amountOf = (s, n) => s.unit === "tokens" ? `${tokens(n)} tokens` : usd2(n);
 function limitLine(s, now) {
   const scope = s.limit.client === "all" ? "all clients" : CLIENT_LABEL[s.limit.client];
   const name = s.limit.window === "5h" ? "5-hour window" : "last 7 days";
@@ -2449,10 +3403,18 @@ export {
   API_EQUIVALENT_NOTE,
   CLIENTS,
   CLIENT_LABEL,
+  CODEX_CREDIT,
+  CODEX_CREDIT_RATES,
+  COPILOT_RATES_USD,
   GROUP_BY,
   METHOD,
   METRICS,
   METRIC_LABEL,
+  MONTH_DAYS,
+  PLANS,
+  PLAN_CHANGES,
+  PLAN_GROUPS,
+  PLAN_IDS,
   PRICE_SOURCES,
   PROTOCOL_VERSIONS,
   PUSH_SCHEMA_ID,
@@ -2462,6 +3424,8 @@ export {
   buildPushPayload,
   callTool,
   clearLimits,
+  codexCredits,
+  copilotUsd,
   dailySeries,
   dayKey,
   detectSteps,
@@ -2471,6 +3435,8 @@ export {
   listSourceFiles,
   load,
   parseSince,
+  planById,
+  planCompare,
   priceFor,
   priceKey,
   pricedModels,
@@ -2480,6 +3446,7 @@ export {
   readCodexFile,
   readLimits,
   reportView,
+  resolvePlans,
   runDemo,
   screenshotText,
   seatledgerHome,

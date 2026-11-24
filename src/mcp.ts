@@ -11,7 +11,7 @@
  * The tools return whatever the CLI would print, as data. Whatever an agent receives goes to its
  * model provider like any other tool result; project folder names are part of it.
  *
- * Two tools read this machine and make no request. `seatledger_team_summary` reads the hosted
+ * Three tools read this machine and make no request. `seatledger_team_summary` reads the hosted
  * team ledger this machine created or joined (`seatledger team create` / `team join`), with the
  * key saved for it; it is the only tool that opens a network connection, and only to that ledger.
  */
@@ -19,6 +19,8 @@ import { createInterface } from "node:readline";
 import { load, type LoadOptions } from "./load.js";
 import { seatledgerHome } from "./paths.js";
 import { GROUP_BY, type GroupBy } from "./ledger.js";
+import { MONTH_DAYS, planCompare } from "./plan-compare.js";
+import { PLAN_GROUPS, PLAN_IDS } from "./plans.js";
 import { parseSince, ratesView, reportView, summaryView } from "./views.js";
 import { TeamApiError, type FetchLike } from "./team.js";
 import { teamSummary } from "./team-commands.js";
@@ -118,6 +120,33 @@ export const TOOLS: readonly ToolDefinition[] = [
     annotations: annotations("Token rate changes"),
   },
   {
+    name: "seatledger_plan_compare",
+    title: "This machine's month on every coding plan",
+    description:
+      "What this machine's last 30 days of Claude Code and Codex work would cost on each coding plan, read from the local transcripts: the Anthropic and OpenAI APIs at list prices; Claude Pro, Max 5x, Max 20x, Team standard and Team premium; ChatGPT Plus and Pro; Codex credits at OpenAI's rate card; and Copilot Pro, Pro+ and Max at GitHub's per-token AI-credit rates. Returns each client's tokens, API-equivalent dollars and busiest 5 hours and week; a quote per plan saying how it was reached (priced from published rates, measured from Codex's own window readings, or an estimate); per client, the cheapest priced plan, the runner-up and the margin; plans that could be cheaper if an allowance the vendor does not publish holds the busiest 5 hours and week; and the newest dated vendor change that moved the answer. Allowances Anthropic and OpenAI do not publish as numbers are never invented: those plans get their fee and that condition. Copilot figures are estimates, since Copilot keeps no local logs and its agent would not use exactly these tokens. The dollar price of a Codex credit is derived from OpenAI's own figures and marked so. Every plan carries its source URLs and the date they were read. Costs are stated for a 30-day month.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        since: {
+          type: "string",
+          pattern: SINCE_PATTERN,
+          description:
+            "Start of the range: a local date (`2026-09-01`) or a span back from today (`30d`, `12w`). Metered figures are scaled to a 30-day month either way. Omitted: the last 30 days.",
+        },
+        plans: {
+          type: "array",
+          items: { type: "string", enum: [...PLAN_IDS, ...Object.keys(PLAN_GROUPS)] },
+          minItems: 1,
+          uniqueItems: true,
+          description:
+            "Only these plans: plan ids such as `claude-max-5x`, `chatgpt-plus` or `copilot-max`, or a vendor group (`claude`, `codex`, `copilot`). Omitted: every plan.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: annotations("This machine's month on every coding plan"),
+  },
+  {
     name: "seatledger_team_summary",
     title: "Team coding-agent ledger",
     description:
@@ -168,6 +197,21 @@ function checkArgs(tool: ToolDefinition, args: unknown): Args {
         `unknown argument \`${k}\``,
         `Use only: ${Object.keys(props).join(", ")}.`,
       );
+    if (spec.type === "array") {
+      const items = (spec.items ?? {}) as { enum?: string[] };
+      if (!Array.isArray(v) || v.length === 0 || v.some((x) => typeof x !== "string"))
+        throw new InvalidInput(
+          `\`${k}\` must be a non-empty array of strings`,
+          `Pass \`${k}\` as e.g. ["claude-max-5x"], or omit it.`,
+        );
+      const bad = (v as string[]).find((x) => items.enum && !items.enum.includes(x));
+      if (bad !== undefined)
+        throw new InvalidInput(
+          `\`${k}\` has "${bad}"`,
+          `Use any of: ${(items.enum ?? []).join(", ")}.`,
+        );
+      continue;
+    }
     if (typeof v !== "string")
       throw new InvalidInput(`\`${k}\` must be a string`, `Pass \`${k}\` as a string.`);
     const allowed = spec.enum as string[] | undefined;
@@ -178,7 +222,7 @@ function checkArgs(tool: ToolDefinition, args: unknown): Args {
         `\`${k}\` is "${v}"`,
         "Use a local date like 2026-09-01 or a span like 30d or 12w.",
       );
-    if (spec.minLength && v.length < Number(spec.minLength))
+    if (spec.minLength && typeof v === "string" && v.length < Number(spec.minLength))
       throw new InvalidInput(`\`${k}\` is empty`, `Omit \`${k}\` or give a value.`);
   }
   return args as Args;
@@ -213,6 +257,15 @@ export async function callTool(
     }
     const client = args.client as Client | undefined;
     const since = typeof args.since === "string" ? parseSince(args.since, now) : undefined;
+    if (name === "seatledger_plan_compare") {
+      const from = since ?? now - MONTH_DAYS * 86_400_000;
+      const loaded = await load({ ...ctx.loadOptions, home, since: from });
+      const plans = Array.isArray(args.plans) ? (args.plans as string[]) : undefined;
+      return {
+        structured: { ...planCompare(loaded, { now, since: from, ...(plans ? { plans } : {}) }) },
+        isError: false,
+      };
+    }
     if (name === "seatledger_usage_summary") {
       if (since === undefined && args.group_by === undefined) {
         const loaded = await load({ ...ctx.loadOptions, home });
@@ -257,7 +310,7 @@ interface Request {
 }
 
 const INSTRUCTIONS =
-  "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits and step changes in token rates. Read-only. seatledger_usage_summary and seatledger_rate_changes make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
+  "seatledger reads this machine's Claude Code and Codex transcripts locally and reports tokens, API-equivalent dollars, the user's own limits, step changes in token rates, and what the month would cost on each coding plan. Read-only. seatledger_usage_summary, seatledger_rate_changes and seatledger_plan_compare make no network calls; seatledger_team_summary reads the hosted team ledger this machine created or joined, with its saved key.";
 
 export async function handleMessage(msg: unknown, ctx: McpContext): Promise<unknown> {
   if (Array.isArray(msg)) {

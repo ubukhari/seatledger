@@ -8,7 +8,15 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { dim, hintFile, quietFromEnv, RATES_HINT, TEAM_HINT, teamHint } from "./hint.js";
+import {
+  dim,
+  hintFile,
+  PRICING_URL,
+  quietFromEnv,
+  RATES_HINT,
+  TEAM_HINT,
+  teamHint,
+} from "./hint.js";
 import { main } from "./main.js";
 import { handleMessage } from "./mcp.js";
 import { writeSyntheticHistory, type SyntheticResult } from "./synthetic.js";
@@ -125,7 +133,14 @@ describe("teamHint", () => {
     expect(dim("x", { TERM: "dumb" })).toBe("x");
     expect(TEAM_HINT).toContain("`npx seatledger team create`");
     expect(TEAM_HINT).toContain("free for up to 3 developers");
-    expect(RATES_HINT).toContain("`npx seatledger team create`");
+    // names the paid plan and where it is sold, tagged as this CLI's (CONV-1)
+    for (const line of [TEAM_HINT, RATES_HINT]) {
+      expect(line).toContain("Team, $49/month");
+      expect(line.endsWith(PRICING_URL)).toBe(true);
+    }
+    expect(PRICING_URL).toBe(
+      "https://agentwares-agentcheck.vercel.app/seatledger/pricing?ref=seatledger-cli",
+    );
   });
 
   it.skipIf(process.getuid?.() === 0)("is not shown when it could not record that it was", () => {

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.1 (2026-10-20)
+
+- The once-a-day line after `seatledger`, `report` and `rates` now names the paid plan it is
+  about (Team, $49/month) and links its pricing page with `?ref=seatledger-cli`, so a visit and a
+  checkout that follow it are counted as this CLI's. Same rules as before: a terminal only, never
+  with `--json` or in MCP output, never once on a team, off with `--quiet` or `SEATLEDGER_QUIET=1`;
+  printing it sends nothing.
+
+## 0.3.0 (2026-10-08)
+
+What your own month costs on every coding plan.
+
+- New MCP tool `seatledger_plan_compare`: prices the last 30 days of local Claude Code and Codex
+  usage on every plan that could carry it (Claude Pro, Max, Team; ChatGPT Plus and Pro; Codex
+  credits; Copilot AI credits, labelled as an estimate), from the same code as
+  `npx --allow-remote=root https://agentwares.vercel.app/dl/tokens-per-dollar-0.2.0.tgz`. Local only; nothing is sent.
+- Library exports for the plan table (`plans.ts`, every row dated) and the comparison
+  (`plan-compare.ts`), used by `tokens-per-dollar`.
+
 ## 0.2.1 (2026-10-07)
 
 From a free install to a team ledger, in one command.

@@ -63,7 +63,8 @@ Usage
   seatledger limits set --window 5h|weekly (--tokens N | --usd N) [--client claude-code|codex]
   seatledger limits clear [--window 5h|weekly] [--client claude-code|codex]
   seatledger mcp                     read-only MCP server on stdio: seatledger_usage_summary,
-                                     seatledger_rate_changes, seatledger_team_summary
+                                     seatledger_rate_changes, seatledger_plan_compare,
+                                     seatledger_team_summary
   seatledger demo                    the summary and rates on synthetic history (reads nothing of yours)
 
 Team ledger (optional; the only commands that send anything)
